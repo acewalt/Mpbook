@@ -113,15 +113,16 @@
   <dialog id="exportDialog" class="modal">
     <div class="modal-card">
       <div class="modal-head"><div><span class="eyebrow" data-i18n="export">Exportar</span><h2 data-i18n="exportAudio">Exportar audio</h2></div><button id="closeExportBtn" class="icon-btn" type="button">×</button></div>
-      <p id="exportInfo" data-i18n="exportOpenAIOnly">La exportación usa OpenAI y genera un MP3 con los fragmentos del libro.</p>
+      <p id="exportInfo" data-i18n="exportOpenAIOnly">Elige cómo quieres generar el audiolibro.</p>
       <div class="export-progress"><div class="progress-track"><div id="exportBar"></div></div><span id="exportStatus">0%</span></div>
-      <div class="modal-actions"><button id="cancelExportBtn" class="ghost-btn" type="button" data-i18n="cancel">Cancelar</button><button id="startExportBtn" class="primary-btn" type="button" data-i18n="startExport">Generar MP3</button></div>
+      <div class="modal-actions"><button id="cancelExportBtn" class="ghost-btn" type="button" data-i18n="cancel">Cancelar</button><button id="startExportBtn" class="primary-btn" type="button">Generar audio</button></div>
     </div>
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="./performance.js?v=7"></script>
-  <script src="./app.js?v=7" defer></script>
-  <script type="module" src="./local-tts.js?v=7"></script>
+  <script src="./performance.js?v=8"></script>
+  <script src="./export-audio.js?v=8"></script>
+  <script src="./app.js?v=8" defer></script>
+  <script type="module" src="./local-tts.js?v=8"></script>
 </body>
 </html>
