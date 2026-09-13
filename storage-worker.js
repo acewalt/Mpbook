@@ -2,6 +2,7 @@
 
 const DB_NAME='mpbook-library';
 const STORE='books';
+const CHAP_MARK='\u0001';
 
 function openDB(){
   return new Promise((resolve,reject)=>{
@@ -55,10 +56,35 @@ async function getBook(id){
   } finally { try{db.close();}catch{} }
 }
 
+function bookToCompact(book){
+  if(!book) return null;
+  if(typeof book.raw==='string'){
+    return {id:book.id,title:book.title||'Libro',type:book.type||'EPUB',filename:book.filename||'',raw:book.raw,updatedAt:book.updatedAt||0};
+  }
+  const chapters=Array.isArray(book.chapters)?book.chapters:[];
+  const parts=[];
+  for(let i=0;i<chapters.length;i++){
+    const c=chapters[i]||{};
+    const title=String(c.title||`Capítulo ${i+1}`).replace(/[\r\n]+/g,' ').trim();
+    const body=(Array.isArray(c.segments)?c.segments:[]).filter(Boolean).join('\n\n');
+    if(body.trim()) parts.push(CHAP_MARK+title+'\n\n'+body);
+  }
+  return {
+    id:book.id,
+    title:book.title||'Libro',
+    type:book.type||'EPUB',
+    filename:book.filename||'',
+    raw:parts.join('\n\n'),
+    updatedAt:book.updatedAt||0
+  };
+}
+
+async function compactBook(id){
+  const book=await getBook(id);
+  return bookToCompact(book);
+}
+
 async function streamBook(id,requestId){
-  // IndexedDB clones the legacy large object inside this worker, not on the UI thread.
-  // We then transfer one chapter per task so the browser UI never receives one huge
-  // structured-clone payload at once.
   const book=await getBook(id);
   if(!book){
     postMessage({requestId,type:'error',message:'Book not found'});
@@ -77,7 +103,6 @@ async function streamBook(id,requestId){
   postMessage({requestId,type:'stream-meta',meta});
   for(let i=0;i<chapters.length;i++){
     const c=chapters[i]||{};
-    // Copy only the fields the reader needs and send a single chapter at a time.
     postMessage({
       requestId,
       type:'stream-chapter',
@@ -125,6 +150,7 @@ self.onmessage=async event=>{
     let result=null;
     if(msg.type==='list') result=await listBooks();
     else if(msg.type==='get') result=await getBook(msg.id);
+    else if(msg.type==='compact') result=await compactBook(msg.id);
     else if(msg.type==='put') result=await putBook(msg.book);
     else if(msg.type==='delete') result=await deleteBook(msg.id);
     else throw new Error('Unknown storage request');
