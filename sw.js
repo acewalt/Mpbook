@@ -1,4 +1,4 @@
-const CACHE='mpbook-v15';
+const CACHE='mpbook-v16';
 const ASSETS=[
   './',
   './index.html',
@@ -9,7 +9,7 @@ const ASSETS=[
   './local-tts.js?v=15',
   './tts-worker.js?v=15',
   './epub-worker.js?v=15',
-  './storage-worker.js?v=15',
+  './storage-worker.js?v=16',
   './manifest.webmanifest',
   './icon.svg'
 ];
