@@ -27,7 +27,7 @@ public sealed class MainForm : Form
         var voicesItem = new ToolStripMenuItem("Voces de Windows");
         voicesItem.Click += (_, _) => ShowInstalledVoices();
         var reloadItem = new ToolStripMenuItem("Recargar MPBook");
-        reloadItem.Click += (_, _) => _webView.Reload();
+        reloadItem.Click += (_, _) => _webView.CoreWebView2?.Reload();
         menu.Items.Add(voicesItem);
         menu.Items.Add(reloadItem);
 
@@ -204,13 +204,12 @@ public sealed class MainForm : Form
         if (size64 > int.MaxValue || size64 > uint.MaxValue)
             throw new InvalidOperationException("El audio generado es demasiado grande para este puente.");
 
-        using IInputStream input = stream.GetInputStreamAt(0);
-        using var reader = new DataReader(input);
+        using var reader = new DataReader(stream.GetInputStreamAt(0));
         uint size = (uint)size64;
         uint loaded = await reader.LoadAsync(size);
         if (loaded == 0) throw new InvalidOperationException("No se pudieron leer los datos de audio de Windows.");
 
-        var bytes = new byte[loaded];
+        var bytes = new byte[(int)loaded];
         reader.ReadBytes(bytes);
 
         return new
@@ -240,7 +239,7 @@ public sealed class MainForm : Form
     {
         if (InvokeRequired)
         {
-            BeginInvoke(() => PostJson(json));
+            BeginInvoke((Action)(() => PostJson(json)));
             return;
         }
         _webView.CoreWebView2?.PostWebMessageAsJson(json);
