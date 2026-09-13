@@ -175,7 +175,7 @@
   function isProtected(node) {
     const el = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
     if (!el) return false;
-    return !!el.closest('#segList .txt, #markQuote, .lib-title, textarea, input, [contenteditable="true"]');
+    return !!el.closest('#segList, #markQuote, .lib-title, textarea, input, [contenteditable="true"]');
   }
 
   function translateTextNode(node) {
@@ -204,7 +204,7 @@
     if (!root) return;
     if (root.nodeType === Node.ELEMENT_NODE) {
       const el = root;
-      if (el.closest('#segList .txt, #markQuote, .lib-title')) return;
+      if (el.closest('#segList, #markQuote, .lib-title')) return;
       translateAttributes(el);
       if (el.tagName === 'OPTION') {
         const next = translateOptionText(el.textContent.trim());
@@ -326,10 +326,10 @@
   const observer = new MutationObserver(records => {
     if (applying) return;
     for (const rec of records) {
-      if (rec.target?.nodeType === Node.ELEMENT_NODE && rec.target.closest?.('#segList .txt, #markQuote, .lib-title')) continue;
+      if (rec.target?.nodeType === Node.ELEMENT_NODE && rec.target.closest?.('#segList, #markQuote, .lib-title')) continue;
       if (rec.type === 'childList') {
         for (const node of rec.addedNodes) {
-          if (node.nodeType === Node.ELEMENT_NODE && node.closest?.('#segList .txt, #markQuote, .lib-title')) continue;
+          if (node.nodeType === Node.ELEMENT_NODE && node.closest?.('#segList, #markQuote, .lib-title')) continue;
           translateTree(node);
         }
       } else if (rec.type === 'characterData') {
