@@ -1,4 +1,4 @@
-name: Vendor Piper voices
+name: Vendor local voice models
 
 on:
   push:
@@ -58,29 +58,80 @@ jobs:
               "$base/$rel?download=true" -o "$dst"
           done
 
+      - name: Download English Kokoro model and voices
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main'
+          files=(
+            'config.json'
+            'tokenizer.json'
+            'tokenizer_config.json'
+            'onnx/model_quantized.onnx'
+            'voices/af_heart.bin'
+            'voices/af_bella.bin'
+            'voices/af_nicole.bin'
+            'voices/af_sarah.bin'
+            'voices/af_kore.bin'
+            'voices/af_aoede.bin'
+            'voices/af_alloy.bin'
+            'voices/af_nova.bin'
+            'voices/af_river.bin'
+            'voices/af_jessica.bin'
+            'voices/af_sky.bin'
+            'voices/am_michael.bin'
+            'voices/am_fenrir.bin'
+            'voices/am_liam.bin'
+            'voices/am_eric.bin'
+            'voices/am_puck.bin'
+            'voices/am_onyx.bin'
+            'voices/am_echo.bin'
+            'voices/am_adam.bin'
+            'voices/am_santa.bin'
+            'voices/bf_emma.bin'
+            'voices/bf_alice.bin'
+            'voices/bf_isabella.bin'
+            'voices/bf_lily.bin'
+            'voices/bm_george.bin'
+            'voices/bm_fable.bin'
+            'voices/bm_daniel.bin'
+            'voices/bm_lewis.bin'
+          )
+          for rel in "${files[@]}"; do
+            dst="assets/kokoro/$rel"
+            mkdir -p "$(dirname "$dst")"
+            if [ -s "$dst" ]; then
+              echo "Already present: $dst"
+              continue
+            fi
+            echo "Downloading Kokoro $rel"
+            curl -fL --retry 5 --retry-delay 2 --connect-timeout 30 \
+              "$base/$rel?download=true" -o "$dst"
+          done
+
       - name: Verify GitHub file-size limit
         shell: bash
         run: |
           set -euo pipefail
-          find assets/voices -type f -printf '%s %p\n' | sort -nr | head -20
-          too_big=$(find assets/voices -type f -size +99M -print -quit)
+          find assets/voices assets/kokoro -type f -printf '%s %p\n' | sort -nr | head -40
+          too_big=$(find assets/voices assets/kokoro -type f -size +99M -print -quit)
           if [ -n "$too_big" ]; then
             echo "File exceeds GitHub's normal 100 MiB file limit: $too_big"
             exit 1
           fi
 
-      - name: Commit vendored voices
+      - name: Commit vendored voice assets
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add assets/voices
+          git add assets/voices assets/kokoro
           if git diff --cached --quiet; then
             echo 'No voice files to commit.'
             exit 0
           fi
-          git commit -m 'Add local Spanish Piper voice models'
+          git commit -m 'Add local Piper and Kokoro voice models'
           git fetch origin main
           git rebase origin/main
           git push origin HEAD:main
