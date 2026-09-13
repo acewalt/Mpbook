@@ -1,0 +1,77 @@
+name: Fix Kokoro Spanish and export
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-kokoro-es-export.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch natural voices and export UI
+        shell: python
+        run: |
+          from pathlib import Path
+
+          p = Path('natural-voices.js')
+          s = p.read_text(encoding='utf-8')
+
+          s = s.replace(
+          '''      const [hf, ph] = await Promise.all([\n        import("https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.5.1"),\n        import("https://cdn.jsdelivr.net/npm/phonemizer@1.2.1")\n      ]);''',
+          '''      const [hf, ph, eph] = await Promise.all([\n        import("https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.5.1"),\n        import("https://cdn.jsdelivr.net/npm/phonemizer@1.2.1"),\n        import("https://cdn.jsdelivr.net/npm/ephone@1.0.2/+esm")\n      ]);\n      const spanishG2P = await eph.default(eph.roa);\n      spanishG2P.setVoice("es");''')
+
+          s = s.replace(
+          '''      return { hf, phonemize: ph.phonemize, model, tokenizer };''',
+          '''      return { hf, phonemize: ph.phonemize, spanishG2P, model, tokenizer };''')
+
+          s = s.replace(
+          '''    const language = voiceLanguage(voice);\n    const raw = await runtime.phonemize(text, language);\n    const phonemes = Array.isArray(raw) ? raw.join(" ") : String(raw || "");''',
+          '''    const language = voiceLanguage(voice);\n    let phonemes;\n    if (language === "es") {\n      phonemes = String(runtime.spanishG2P.textToIpa(text) || "");\n    } else {\n      const raw = await runtime.phonemize(text, language);\n      phonemes = Array.isArray(raw) ? raw.join(" ") : String(raw || "");\n    }''')
+
+          p.write_text(s, encoding='utf-8')
+
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+          marker = '/* ============ 整本匯出音檔 ============ */'
+          helper = '''function exportT(es, en) {\n  return localStorage.getItem("mpbook.uiLanguage") === "en" ? en : es;\n}\n\n'''
+          if helper not in s:
+              s = s.replace(marker, helper + marker)
+
+          s = s.replace('''  $("#exportInfo").textContent = "計算費用與檔案大小中……";''',
+                        '''  $("#exportInfo").textContent = exportT("Calculando tamaño y tiempo…", "Calculating size and time…");''')
+
+          old = '''  const usdTxt = est.usd === null ? "依方案而定"\n    : est.usd === 0 ? "$0（全部已有快取）"\n    : "≈ US$" + est.usd.toFixed(2) + "（約 NT$" + Math.round(est.usd * 31.5) + "）";\n  const fmt = (cfg.provider === "gemini" || cfg.provider === "kokoro") ? "WAV（無壓縮，檔較大）" : "MP3";\n  $("#exportInfo").innerHTML =\n    `全書 ${total.toLocaleString()} 字，其中 <b>${cached.toLocaleString()} 字已有快取（$0）</b><br>` +\n    `預估新合成費用：<b>${usdTxt}</b>` +\n    (cfg.provider === "google" ? "<br>（Google 每月有免費額度，額度內實付 $0）" : "") + "<br>" +\n    `預估音訊：約 ${Math.max(1, Math.round(est.minutes))} 分鐘 / ${Math.max(1, Math.round(est.sizeMB))} MB（${fmt}，按章節分檔打包 zip）<br>` +\n    `預估合成時間：約 ${Math.max(1, est.timeMin)} 分鐘<br>` +\n    `<span style="color:var(--warn)">檔案較大，建議在電腦端執行；手機請全程保持螢幕開啟。</span>`;'''
+          new = '''  const isNatural = cfg.provider === "kokoro";\n  const usdTxt = isNatural ? exportT("$0 (voz local)", "$0 (local voice)")\n    : est.usd === null ? exportT("Depende del plan", "Depends on plan")\n    : est.usd === 0 ? exportT("$0 (todo está en caché)", "$0 (everything cached)")\n    : "≈ US$" + est.usd.toFixed(2);\n  const fmt = (cfg.provider === "gemini" || cfg.provider === "kokoro") ? "WAV" : "MP3";\n  $("#exportInfo").innerHTML =\n    exportT(\n      `Libro completo: ${total.toLocaleString()} caracteres; <b>${cached.toLocaleString()} ya están en caché</b><br>` +\n      `Coste estimado: <b>${usdTxt}</b><br>` +\n      `Audio estimado: ${Math.max(1, Math.round(est.minutes))} min / ${Math.max(1, Math.round(est.sizeMB))} MB (${fmt}; se exporta por capítulos en ZIP)<br>` +\n      `Tiempo estimado: ~${Math.max(1, est.timeMin)} min<br>` +\n      `<span style="color:var(--warn)">Para libros grandes es mejor exportar en PC. En móvil mantén la pantalla encendida.</span>`,\n      `Full book: ${total.toLocaleString()} characters; <b>${cached.toLocaleString()} already cached</b><br>` +\n      `Estimated cost: <b>${usdTxt}</b><br>` +\n      `Estimated audio: ${Math.max(1, Math.round(est.minutes))} min / ${Math.max(1, Math.round(est.sizeMB))} MB (${fmt}; chapter files packed as ZIP)<br>` +\n      `Estimated time: ~${Math.max(1, est.timeMin)} min<br>` +\n      `<span style="color:var(--warn)">For large books, exporting on a PC is recommended. On mobile keep the screen awake.</span>`\n    );'''
+          s = s.replace(old, new)
+
+          s = s.replace('''if (Exporter.running) { Exporter.cancel = true; $("#exportStatus").textContent = "取消中……"; }''',
+                        '''if (Exporter.running) { Exporter.cancel = true; $("#exportStatus").textContent = exportT("Cancelando…", "Cancelling…"); }''')
+          s = s.replace('''if (Exporter.cancel) throw new Error("已取消");''', '''if (Exporter.cancel) throw new Error("EXPORT_CANCELLED");''')
+          s = s.replace('''$("#exportStatus").textContent = `第 ${done} / ${totalSegs} 段 · ${r.title}`;''',
+                        '''$("#exportStatus").textContent = exportT(`Fragmento ${done} / ${totalSegs} · ${r.title}`, `Segment ${done} / ${totalSegs} · ${r.title}`);''')
+          s = s.replace('''    const book = sanitizeFilename(State.docTitle || "有聲書");''',
+                        '''    const book = sanitizeFilename(State.docTitle || exportT("Audiolibro", "Audiobook"));''')
+          s = s.replace('''    $("#exportStatus").textContent = "完成，已開始下載。";\n    toast("匯出完成");''',
+                        '''    $("#exportStatus").textContent = exportT("Listo. La descarga ha comenzado.", "Done. Download started.");\n    toast(exportT("Exportación completada", "Export complete"));''')
+          s = s.replace('''    if (e.message === "已取消") {\n      $("#exportStatus").textContent = "已取消。已合成的段落留在快取，下次匯出從那裡續跑、不重複收費。";\n    } else {\n      $("#exportStatus").textContent = "失敗：" + (e.message || e) + "（已完成部分留在快取，重試不重複收費）";\n      toast("匯出失敗：" + (e.message || e), true);\n    }''',
+                        '''    if (e.message === "EXPORT_CANCELLED") {\n      $("#exportStatus").textContent = exportT("Exportación cancelada. Lo ya generado permanece en caché.", "Export cancelled. Already generated audio remains cached.");\n    } else {\n      $("#exportStatus").textContent = exportT("Error: ", "Error: ") + (e.message || e);\n      toast(exportT("Error de exportación: ", "Export error: ") + (e.message || e), true);\n    }''')
+
+          s = s.replace('./natural-voices.js?v=2', './natural-voices.js?v=3').replace('./natural-voices.js?v=1', './natural-voices.js?v=3')
+          p.write_text(s, encoding='utf-8')
+
+          p = Path('sw.js')
+          s = p.read_text(encoding='utf-8')
+          s = s.replace('mpbook-natural-v2', 'mpbook-natural-v3').replace('mpbook-natural-v1', 'mpbook-natural-v3')
+          s = s.replace('./natural-voices.js?v=2', './natural-voices.js?v=3').replace('./natural-voices.js?v=1', './natural-voices.js?v=3')
+          p.write_text(s, encoding='utf-8')
+      - name: Remove one-time workflow
+        run: rm -f .github/workflows/fix-kokoro-es-export.yml
+      - name: Commit changes
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add natural-voices.js index.html sw.js .github/workflows/fix-kokoro-es-export.yml
+          git commit -m "Fix Spanish Kokoro playback and export audio UI"
+          git push
