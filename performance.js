@@ -1,11 +1,72 @@
 (() => {
-  // The base stylesheet gives every settings label display:grid. In Chromium
-  // that can make elements with the `hidden` attribute remain visible.
   // Force the HTML hidden contract so Browser / Natural / OpenAI controls do
-  // not overlap or fight each other when switching engines.
+  // not overlap when switching engines.
   const style = document.createElement('style');
   style.textContent = '[hidden]{display:none!important}.virtual-note{color:var(--muted);font-family:Inter,ui-sans-serif,sans-serif;font-size:.82rem;padding:8px 12px}';
   document.head.appendChild(style);
+
+  const $ = s => document.querySelector(s);
+  const tx = (es,en) => document.documentElement.lang?.startsWith('en') ? en : es;
+
+  // Saving Natural local used to fall through to app.js, which immediately
+  // re-rendered the whole current chapter. On large EPUB chapters this could
+  // block Chromium for several seconds and trigger "Page unresponsive".
+  // Handle Natural settings here in capture phase and persist only the settings;
+  // no book re-render and no TTS/model initialization occurs on Save.
+  const settingsForm = $('#settingsForm');
+  if(settingsForm){
+    settingsForm.addEventListener('submit', event => {
+      if(event.submitter?.value === 'cancel') return;
+      const engine = $('#engineSelect')?.value || 'browser';
+      if(engine !== 'natural') return;
+
+      event.preventDefault();
+      event.stopImmediatePropagation();
+
+      const lang = $('#speechLang')?.value || 'es-ES';
+      const voice = $('#naturalVoice')?.value || '';
+      const rate = Number($('#rateInput')?.value || 1);
+      const pitch = Number($('#pitchInput')?.value || 1);
+
+      localStorage.setItem('mpbook.engine','natural');
+      localStorage.setItem('mpbook.speechLang',lang);
+      localStorage.setItem('mpbook.rate',String(rate));
+      localStorage.setItem('mpbook.pitch',String(pitch));
+      if(voice) localStorage.setItem(`mpbook.naturalVoice.${lang}`,voice);
+
+      const badge = $('#engineBadge');
+      if(badge) badge.textContent = lang.startsWith('en-') ? 'Kokoro' : 'Piper';
+
+      const dialog = $('#settingsDialog');
+      if(dialog?.open) dialog.close();
+
+      const toast = $('#toast');
+      if(toast){
+        toast.textContent = tx('Ajustes guardados.','Settings saved.');
+        toast.classList.add('show');
+        clearTimeout(window.__mpbookSafeSaveToast);
+        window.__mpbookSafeSaveToast = setTimeout(()=>toast.classList.remove('show'),2400);
+      }
+    }, true);
+  }
+
+  // app.js keeps a private in-memory settings object. If Natural was saved by
+  // the safe path above, opening the dialog later can momentarily restore the
+  // old engine. Re-apply the persisted values after app.js finishes populating it.
+  $('#settingsBtn')?.addEventListener('click', () => {
+    setTimeout(() => {
+      const savedEngine = localStorage.getItem('mpbook.engine');
+      if(savedEngine !== 'natural') return;
+      const engine = $('#engineSelect');
+      const lang = $('#speechLang');
+      if(engine){ engine.value = 'natural'; engine.dispatchEvent(new Event('change',{bubbles:true})); }
+      const savedLang = localStorage.getItem('mpbook.speechLang');
+      if(lang && savedLang){ lang.value = savedLang; lang.dispatchEvent(new Event('change',{bubbles:true})); }
+      const rate = $('#rateInput');
+      const savedRate = localStorage.getItem('mpbook.rate');
+      if(rate && savedRate){ rate.value = savedRate; rate.dispatchEvent(new Event('input',{bubbles:true})); }
+    }, 0);
+  });
 
   const reader = document.getElementById('readerText');
   if (!reader) return;
@@ -26,8 +87,6 @@
       let count = 0, pos = 0;
       while ((pos = html.indexOf(marker, pos)) !== -1) { count++; pos += marker.length; }
 
-      // Small chapters are rendered normally. Large chapters are virtualized so
-      // thousands of paragraphs do not freeze the browser on every next/previous step.
       if (count <= 140) {
         this.dataset.virtualTotal = String(count);
         nativeSet.call(this, html);
