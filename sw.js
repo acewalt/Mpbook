@@ -1,6 +1,14 @@
-/* Audiobook｜有聲書 App 殼快取：只快取同網域靜態檔，TTS API 請求一律放行 */
-const CACHE = "mpbook-natural-v3";
-const ASSETS = ["./", "./index.html", "./manifest.webmanifest", "./icon.svg", "./i18n.js?v=3", "./natural-voices.js?v=3"];
+/* Audiobook｜有聲書 App shell cache: same-origin static files only. TTS/model requests pass through. */
+const CACHE = "mpbook-natural-v4";
+const ASSETS = [
+  "./",
+  "./index.html",
+  "./manifest.webmanifest",
+  "./icon.svg",
+  "./i18n.js?v=3",
+  "./natural-voices.js?v=4",
+  "./natural-voices-worker.js?v=4"
+];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)));
