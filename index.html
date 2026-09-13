@@ -2016,6 +2016,10 @@ $("#marksCopyBtn").addEventListener("click", async () => {
   } catch (e) { toast("複製失敗，請改用下載", true); }
 });
 
+function exportT(es, en) {
+  return localStorage.getItem("mpbook.uiLanguage") === "en" ? en : es;
+}
+
 /* ============ 整本匯出音檔 ============ */
 const Exporter = { running: false, cancel: false };
 
@@ -2056,34 +2060,42 @@ async function openExportModal() {
   $("#exportProg").hidden = true;
   $("#exportProgBar").style.width = "0";
   $("#exportStatus").textContent = "";
-  $("#exportInfo").textContent = "計算費用與檔案大小中……";
+  $("#exportInfo").textContent = exportT("Calculando tamaño y tiempo…", "Calculating size and time…");
   const total = State.segments.reduce((a, s) => a + s.length, 0);
   const cached = await countCachedChars(cfg);
   const est = exportEstimate(total, cached, cfg.provider, cfg.model);
-  const usdTxt = est.usd === null ? "依方案而定"
-    : est.usd === 0 ? "$0（全部已有快取）"
-    : "≈ US$" + est.usd.toFixed(2) + "（約 NT$" + Math.round(est.usd * 31.5) + "）";
-  const fmt = (cfg.provider === "gemini" || cfg.provider === "kokoro") ? "WAV（無壓縮，檔較大）" : "MP3";
+  const isNatural = cfg.provider === "kokoro";
+  const usdTxt = isNatural ? exportT("$0 (voz local)", "$0 (local voice)")
+    : est.usd === null ? exportT("Depende del plan", "Depends on plan")
+    : est.usd === 0 ? exportT("$0 (todo está en caché)", "$0 (everything cached)")
+    : "≈ US$" + est.usd.toFixed(2);
+  const fmt = (cfg.provider === "gemini" || cfg.provider === "kokoro") ? "WAV" : "MP3";
   $("#exportInfo").innerHTML =
-    `全書 ${total.toLocaleString()} 字，其中 <b>${cached.toLocaleString()} 字已有快取（$0）</b><br>` +
-    `預估新合成費用：<b>${usdTxt}</b>` +
-    (cfg.provider === "google" ? "<br>（Google 每月有免費額度，額度內實付 $0）" : "") + "<br>" +
-    `預估音訊：約 ${Math.max(1, Math.round(est.minutes))} 分鐘 / ${Math.max(1, Math.round(est.sizeMB))} MB（${fmt}，按章節分檔打包 zip）<br>` +
-    `預估合成時間：約 ${Math.max(1, est.timeMin)} 分鐘<br>` +
-    `<span style="color:var(--warn)">檔案較大，建議在電腦端執行；手機請全程保持螢幕開啟。</span>`;
+    exportT(
+      `Libro completo: ${total.toLocaleString()} caracteres; <b>${cached.toLocaleString()} ya están en caché</b><br>` +
+      `Coste estimado: <b>${usdTxt}</b><br>` +
+      `Audio estimado: ${Math.max(1, Math.round(est.minutes))} min / ${Math.max(1, Math.round(est.sizeMB))} MB (${fmt}; se exporta por capítulos en ZIP)<br>` +
+      `Tiempo estimado: ~${Math.max(1, est.timeMin)} min<br>` +
+      `<span style="color:var(--warn)">Para libros grandes es mejor exportar en PC. En móvil mantén la pantalla encendida.</span>`,
+      `Full book: ${total.toLocaleString()} characters; <b>${cached.toLocaleString()} already cached</b><br>` +
+      `Estimated cost: <b>${usdTxt}</b><br>` +
+      `Estimated audio: ${Math.max(1, Math.round(est.minutes))} min / ${Math.max(1, Math.round(est.sizeMB))} MB (${fmt}; chapter files packed as ZIP)<br>` +
+      `Estimated time: ~${Math.max(1, est.timeMin)} min<br>` +
+      `<span style="color:var(--warn)">For large books, exporting on a PC is recommended. On mobile keep the screen awake.</span>`
+    );
   $("#exportGoBtn").disabled = false;
 }
 
 $("#exportBtn").addEventListener("click", openExportModal);
 $("#exportCancelBtn").addEventListener("click", () => {
-  if (Exporter.running) { Exporter.cancel = true; $("#exportStatus").textContent = "取消中……"; }
+  if (Exporter.running) { Exporter.cancel = true; $("#exportStatus").textContent = exportT("Cancelando…", "Cancelling…"); }
   else $("#exportModalBack").hidden = true;
 });
 
 async function synthBlobRetry(text, cfg) {
   let err = null;
   for (let attempt = 0; attempt < 3; attempt++) {
-    if (Exporter.cancel) throw new Error("已取消");
+    if (Exporter.cancel) throw new Error("EXPORT_CANCELLED");
     try { return await getSegmentBlob(text, cfg); } catch (e) { err = e; }
   }
   throw err;
@@ -2107,11 +2119,11 @@ async function runExport() {
       let next = r.from;
       const worker = async () => {
         while (next < r.to) {
-          if (Exporter.cancel) throw new Error("已取消");
+          if (Exporter.cancel) throw new Error("EXPORT_CANCELLED");
           const i = next++;
           blobs[i - r.from] = await synthBlobRetry(segs[i], cfg);
           done++;
-          $("#exportStatus").textContent = `第 ${done} / ${totalSegs} 段 · ${r.title}`;
+          $("#exportStatus").textContent = exportT(`Fragmento ${done} / ${totalSegs} · ${r.title}`, `Segment ${done} / ${totalSegs} · ${r.title}`);
           $("#exportProgBar").style.width = (done / totalSegs * 100) + "%";
         }
       };
@@ -2129,7 +2141,7 @@ async function runExport() {
       }
       files.push({ name: sanitizeFilename(r.title) + ext, data });
     }
-    const book = sanitizeFilename(State.docTitle || "有聲書");
+    const book = sanitizeFilename(State.docTitle || exportT("Audiolibro", "Audiobook"));
     if (files.length === 1) {
       // 無章節書退化單檔直接下載，不打包
       const ext = files[0].name.slice(files[0].name.lastIndexOf("."));
@@ -2139,14 +2151,14 @@ async function runExport() {
       files.forEach((f, k) => { f.name = String(k + 1).padStart(2, "0") + "-" + f.name; });
       downloadBlob(new Blob([zipStore(files)], { type: "application/zip" }), book + ".zip");
     }
-    $("#exportStatus").textContent = "完成，已開始下載。";
-    toast("匯出完成");
+    $("#exportStatus").textContent = exportT("Listo. La descarga ha comenzado.", "Done. Download started.");
+    toast(exportT("Exportación completada", "Export complete"));
   } catch (e) {
-    if (e.message === "已取消") {
-      $("#exportStatus").textContent = "已取消。已合成的段落留在快取，下次匯出從那裡續跑、不重複收費。";
+    if (e.message === "EXPORT_CANCELLED") {
+      $("#exportStatus").textContent = exportT("Exportación cancelada. Lo ya generado permanece en caché.", "Export cancelled. Already generated audio remains cached.");
     } else {
-      $("#exportStatus").textContent = "失敗：" + (e.message || e) + "（已完成部分留在快取，重試不重複收費）";
-      toast("匯出失敗：" + (e.message || e), true);
+      $("#exportStatus").textContent = exportT("Error: ", "Error: ") + (e.message || e);
+      toast(exportT("Error de exportación: ", "Export error: ") + (e.message || e), true);
     }
   } finally {
     Exporter.running = false;
@@ -2593,6 +2605,6 @@ renderLibrary();
 renderMarksPanel();
 </script>
 <script src="./i18n.js?v=3"></script>
-<script src="./natural-voices.js?v=2"></script>
+<script src="./natural-voices.js?v=3"></script>
 </body>
 </html>

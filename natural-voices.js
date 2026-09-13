@@ -100,10 +100,13 @@
     if (runtimePromise) return runtimePromise;
     runtimePromise = (async () => {
       report(tr("Cargando voces naturales…", "Loading natural voices…"));
-      const [hf, ph] = await Promise.all([
+      const [hf, ph, eph] = await Promise.all([
         import("https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.5.1"),
-        import("https://cdn.jsdelivr.net/npm/phonemizer@1.2.1")
+        import("https://cdn.jsdelivr.net/npm/phonemizer@1.2.1"),
+        import("https://cdn.jsdelivr.net/npm/ephone@1.0.2/+esm")
       ]);
+      const spanishG2P = await eph.default(eph.roa);
+      spanishG2P.setVoice("es");
 
       if (hf.env) {
         hf.env.allowLocalModels = false;
@@ -124,7 +127,7 @@
         hf.AutoTokenizer.from_pretrained(MODEL_ID, { progress_callback }),
       ]);
 
-      return { hf, phonemize: ph.phonemize, model, tokenizer };
+      return { hf, phonemize: ph.phonemize, spanishG2P, model, tokenizer };
     })().catch((err) => {
       runtimePromise = null;
       throw err;
@@ -159,8 +162,13 @@
 
   async function synthPart(text, voice, runtime) {
     const language = voiceLanguage(voice);
-    const raw = await runtime.phonemize(text, language);
-    const phonemes = Array.isArray(raw) ? raw.join(" ") : String(raw || "");
+    let phonemes;
+    if (language === "es") {
+      phonemes = String(runtime.spanishG2P.textToIpa(text) || "");
+    } else {
+      const raw = await runtime.phonemize(text, language);
+      phonemes = Array.isArray(raw) ? raw.join(" ") : String(raw || "");
+    }
     if (!phonemes.trim()) throw new Error(tr("No se pudo fonetizar el texto.", "Could not phonemize the text."));
 
     const tokenized = runtime.tokenizer(phonemes, { truncation: true });
