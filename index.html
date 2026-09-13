@@ -88,9 +88,10 @@
     <form method="dialog" class="modal-card" id="settingsForm">
       <div class="modal-head"><div><span class="eyebrow" data-i18n="audio">Audio</span><h2 data-i18n="voiceSettings">Ajustes de voz</h2></div><button class="icon-btn" value="cancel" type="submit">×</button></div>
       <div class="form-grid">
-        <label><span data-i18n="engine">Motor de voz</span><select id="engineSelect"><option value="browser" data-i18n="browserVoice">Navegador (gratis)</option><option value="openai">OpenAI</option></select></label>
+        <label><span data-i18n="engine">Motor de voz</span><select id="engineSelect"><option value="browser" data-i18n="browserVoice">Navegador (gratis)</option><option value="natural">Natural local (gratis)</option><option value="openai">OpenAI</option></select></label>
         <label><span data-i18n="speechLanguage">Idioma de lectura</span><select id="speechLang"><option value="es-ES">Español</option><option value="es-MX">Español (México)</option><option value="en-US">English (US)</option><option value="en-GB">English (UK)</option><option value="fr-FR">Français</option><option value="de-DE">Deutsch</option><option value="it-IT">Italiano</option><option value="pt-BR">Português</option><option value="ja-JP">日本語</option><option value="ko-KR">한국어</option><option value="zh-TW">中文（台灣）</option></select></label>
         <label id="browserVoiceRow" class="wide"><span data-i18n="voice">Voz</span><select id="browserVoice"></select></label>
+        <label id="naturalVoiceRow" class="wide" hidden><span>Voz natural local</span><select id="naturalVoice"></select><small id="naturalNote"></small><small id="naturalStatus" style="display:block;margin-top:.4rem"></small></label>
         <label id="apiKeyRow" class="wide" hidden><span>OpenAI API key</span><input id="openaiKey" type="password" autocomplete="off" placeholder="sk-..."><small data-i18n="keyPrivacy">La clave se guarda solo en este navegador.</small></label>
         <label id="modelRow" hidden><span data-i18n="model">Modelo</span><select id="openaiModel"><option value="gpt-4o-mini-tts">gpt-4o-mini-tts</option><option value="tts-1">tts-1</option><option value="tts-1-hd">tts-1-hd</option></select></label>
         <label id="openaiVoiceRow" hidden><span data-i18n="voice">Voz</span><select id="openaiVoice"><option value="alloy">alloy</option><option value="ash">ash</option><option value="ballad">ballad</option><option value="coral">coral</option><option value="echo">echo</option><option value="fable">fable</option><option value="nova">nova</option><option value="onyx">onyx</option><option value="sage">sage</option><option value="shimmer">shimmer</option></select></label>
@@ -119,7 +120,7 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="./app.js" defer></script>
-  <script type="module" src="./local-tts.js"></script>
+  <script src="./app.js?v=6" defer></script>
+  <script type="module" src="./local-tts.js?v=6"></script>
 </body>
 </html>
