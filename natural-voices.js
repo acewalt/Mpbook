@@ -90,4 +90,14 @@
       localStorage.setItem(DEFAULT_MIGRATION, "1");
     }
   } catch (_) {}
+
+  // Piper se registra como un motor adicional sin agrandar index.html.
+  try {
+    if (!document.querySelector('script[data-mpbook-piper]')) {
+      const script = document.createElement("script");
+      script.src = "./piper-voices.js?v=1";
+      script.dataset.mpbookPiper = "1";
+      document.body.appendChild(script);
+    }
+  } catch (_) {}
 })();
