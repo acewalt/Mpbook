@@ -1,9 +1,32 @@
 'use strict';
 
 const dec = new TextDecoder();
+const DB_NAME='mpbook-library';
+const STORE='books';
 
 function u16(dv,o){ return dv.getUint16(o,true); }
 function u32(dv,o){ return dv.getUint32(o,true); }
+
+function openDB(){
+  return new Promise((resolve,reject)=>{
+    const req=indexedDB.open(DB_NAME,1);
+    req.onupgradeneeded=()=>{if(!req.result.objectStoreNames.contains(STORE))req.result.createObjectStore(STORE,{keyPath:'id'});};
+    req.onsuccess=()=>resolve(req.result);
+    req.onerror=()=>reject(req.error||new Error('IndexedDB open failed'));
+  });
+}
+async function saveBook(book){
+  const db=await openDB();
+  try{
+    await new Promise((resolve,reject)=>{
+      const tx=db.transaction(STORE,'readwrite');
+      tx.objectStore(STORE).put(book);
+      tx.oncomplete=()=>resolve();
+      tx.onerror=()=>reject(tx.error||new Error('Book save failed'));
+      tx.onabort=()=>reject(tx.error||new Error('Book save aborted'));
+    });
+  } finally {try{db.close();}catch{}}
+}
 
 function normalizePath(base, href){
   if(/^https?:/i.test(href)) return href;
@@ -174,12 +197,16 @@ async function parseEpub(buffer, meta, lang){
       }
     }
     if(i%2===0 || i===spine.length-1){
-      const pct=10+Math.round(((i+1)/spine.length)*88);
+      const pct=10+Math.round(((i+1)/spine.length)*84);
       postMessage({type:'progress',stage:'chapters',value:pct,done:i+1,total:spine.length});
     }
   }
   if(!chapters.length) throw new Error('No readable chapters');
-  return {id:`epub:${meta.name}:${meta.size}:${meta.lastModified}`,title,type:'EPUB',filename:meta.name,chapters,updatedAt:Date.now()};
+  const book={id:`epub:${meta.name}:${meta.size}:${meta.lastModified}`,title,type:'EPUB',filename:meta.name,chapters,updatedAt:Date.now()};
+  postMessage({type:'progress',stage:'saving',value:96,done:spine.length,total:spine.length});
+  await saveBook(book);
+  postMessage({type:'progress',stage:'saving',value:99,done:spine.length,total:spine.length});
+  return book;
 }
 
 self.onmessage=async event=>{
