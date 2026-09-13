@@ -3,6 +3,7 @@
 const dec = new TextDecoder();
 const DB_NAME='mpbook-library';
 const STORE='books';
+const CHAP_MARK='\u0001';
 
 function u16(dv,o){ return dv.getUint16(o,true); }
 function u32(dv,o){ return dv.getUint32(o,true); }
@@ -169,7 +170,7 @@ function htmlToChapter(html, fallbackTitle){
   return {title:title||fallbackTitle,text};
 }
 
-async function parseEpub(buffer, meta, lang){
+async function parseBase(buffer,meta,lang,onChapter){
   const zip=await unzipEntries(buffer);
   postMessage({type:'progress',stage:'zip',value:5});
   const container=dec.decode(await zip.read('META-INF/container.xml'));
@@ -181,7 +182,7 @@ async function parseEpub(buffer, meta, lang){
   const manifest=parseManifest(opfText);
   const spine=parseSpine(opfText);
   if(!spine.length) throw new Error('No spine');
-  const chapters=[];
+  let readable=0;
   for(let i=0;i<spine.length;i++){
     const item=manifest.get(spine[i]);
     if(item?.href){
@@ -189,30 +190,62 @@ async function parseEpub(buffer, meta, lang){
       if(zip.files.has(path)){
         try{
           const html=dec.decode(await zip.read(path));
-          const fallback=`${lang==='en'?'Chapter':'Capítulo'} ${chapters.length+1}`;
+          const fallback=`${lang==='en'?'Chapter':'Capítulo'} ${readable+1}`;
           const parsed=htmlToChapter(html,fallback);
-          const segments=splitSegments(parsed.text);
-          if(segments.length) chapters.push({title:parsed.title||fallback,segments});
+          if(parsed.text.trim()){
+            readable++;
+            onChapter(parsed.title||fallback,parsed.text);
+          }
         }catch{}
       }
     }
     if(i%2===0 || i===spine.length-1){
-      const pct=10+Math.round(((i+1)/spine.length)*84);
+      const pct=10+Math.round(((i+1)/spine.length)*86);
       postMessage({type:'progress',stage:'chapters',value:pct,done:i+1,total:spine.length});
     }
   }
-  if(!chapters.length) throw new Error('No readable chapters');
+  if(!readable) throw new Error('No readable chapters');
+  return {title};
+}
+
+async function parseEpub(buffer, meta, lang){
+  const chapters=[];
+  const {title}=await parseBase(buffer,meta,lang,(chapterTitle,text)=>{
+    const segments=splitSegments(text);
+    if(segments.length) chapters.push({title:chapterTitle,segments});
+  });
   const book={id:`epub:${meta.name}:${meta.size}:${meta.lastModified}`,title,type:'EPUB',filename:meta.name,chapters,updatedAt:Date.now()};
-  postMessage({type:'progress',stage:'saving',value:96,done:spine.length,total:spine.length});
+  postMessage({type:'progress',stage:'saving',value:97});
   await saveBook(book);
-  postMessage({type:'progress',stage:'saving',value:99,done:spine.length,total:spine.length});
   return book;
+}
+
+async function parseEpubCompact(buffer,meta,lang){
+  const parts=[];
+  const {title}=await parseBase(buffer,meta,lang,(chapterTitle,text)=>{
+    const safeTitle=String(chapterTitle||'').replace(/[\r\n]+/g,' ').trim();
+    parts.push(CHAP_MARK+safeTitle+'\n\n'+String(text||'').trim());
+  });
+  const raw=parts.join('\n\n');
+  return {
+    id:`epub:${meta.name}:${meta.size}:${meta.lastModified}`,
+    title,
+    type:'EPUB',
+    filename:meta.name,
+    raw,
+    updatedAt:Date.now()
+  };
 }
 
 self.onmessage=async event=>{
   const msg=event.data||{};
-  if(msg.type!=='parse') return;
   try{
+    if(msg.type==='parse-compact'){
+      const doc=await parseEpubCompact(msg.buffer,msg.meta||{},msg.lang||'es');
+      postMessage({type:'result-compact',doc});
+      return;
+    }
+    if(msg.type!=='parse') return;
     const book=await parseEpub(msg.buffer,msg.meta||{},msg.lang||'es');
     postMessage({type:'result',book});
   }catch(err){
