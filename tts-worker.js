@@ -2,10 +2,10 @@ const PIPER_CDN = 'https://cdn.jsdelivr.net/npm/@realtimex/piper-tts-web@1.1.1/+
 const KOKORO_CDN = 'https://cdn.jsdelivr.net/npm/kokoro-js@1.2.1/+esm';
 const KOKORO_MODEL = 'onnx-community/Kokoro-82M-v1.0-ONNX';
 
-// Spanish Piper models are vendored under assets/voices. Piper itself still
-// thinks its model base is Hugging Face, so redirect only those known model
-// requests to this GitHub Pages site. If a file has not arrived yet (for
-// example while the vendor workflow is still running), fall back to upstream.
+// Voice/model assets are vendored in this repository. The TTS libraries still
+// construct Hugging Face URLs internally, so the worker redirects only the
+// known model requests to same-origin GitHub Pages files. If a local asset is
+// unavailable, the original upstream request is used as a safety fallback.
 const LOCAL_PIPER_FILES = new Set([
   'es/es_MX/claude/high/es_MX-claude-high.onnx',
   'es/es_MX/claude/high/es_MX-claude-high.onnx.json',
@@ -23,17 +23,64 @@ const LOCAL_PIPER_FILES = new Set([
   'es/es_ES/carlfm/x_low/es_ES-carlfm-x_low.onnx.json'
 ]);
 
+const LOCAL_KOKORO_FILES = new Set([
+  'config.json',
+  'tokenizer.json',
+  'tokenizer_config.json',
+  'onnx/model_quantized.onnx',
+  'voices/af_heart.bin',
+  'voices/af_bella.bin',
+  'voices/af_nicole.bin',
+  'voices/af_sarah.bin',
+  'voices/af_kore.bin',
+  'voices/af_aoede.bin',
+  'voices/af_alloy.bin',
+  'voices/af_nova.bin',
+  'voices/af_river.bin',
+  'voices/af_jessica.bin',
+  'voices/af_sky.bin',
+  'voices/am_michael.bin',
+  'voices/am_fenrir.bin',
+  'voices/am_liam.bin',
+  'voices/am_eric.bin',
+  'voices/am_puck.bin',
+  'voices/am_onyx.bin',
+  'voices/am_echo.bin',
+  'voices/am_adam.bin',
+  'voices/am_santa.bin',
+  'voices/bf_emma.bin',
+  'voices/bf_alice.bin',
+  'voices/bf_isabella.bin',
+  'voices/bf_lily.bin',
+  'voices/bm_george.bin',
+  'voices/bm_fable.bin',
+  'voices/bm_daniel.bin',
+  'voices/bm_lewis.bin'
+]);
+
 const nativeFetch = self.fetch.bind(self);
 self.fetch = async (input, init) => {
   try {
     const sourceUrl = typeof input === 'string' ? input : input?.url;
     const url = new URL(sourceUrl, self.location.href);
-    const marker = '/piper-voices/resolve/main/';
-    const pos = url.pathname.indexOf(marker);
-    if (url.hostname === 'huggingface.co' && pos >= 0) {
-      const rel = decodeURIComponent(url.pathname.slice(pos + marker.length));
+
+    const piperMarker = '/piper-voices/resolve/main/';
+    const piperPos = url.pathname.indexOf(piperMarker);
+    if (url.hostname === 'huggingface.co' && piperPos >= 0) {
+      const rel = decodeURIComponent(url.pathname.slice(piperPos + piperMarker.length));
       if (LOCAL_PIPER_FILES.has(rel)) {
         const localUrl = new URL(`./assets/voices/${rel}`, self.location.href);
+        const localResponse = await nativeFetch(localUrl, { ...init, cache: 'force-cache' });
+        if (localResponse.ok) return localResponse;
+      }
+    }
+
+    const kokoroMarker = '/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/';
+    const kokoroPos = url.pathname.indexOf(kokoroMarker);
+    if (url.hostname === 'huggingface.co' && kokoroPos >= 0) {
+      const rel = decodeURIComponent(url.pathname.slice(kokoroPos + kokoroMarker.length));
+      if (LOCAL_KOKORO_FILES.has(rel)) {
+        const localUrl = new URL(`./assets/kokoro/${rel}`, self.location.href);
         const localResponse = await nativeFetch(localUrl, { ...init, cache: 'force-cache' });
         if (localResponse.ok) return localResponse;
       }
