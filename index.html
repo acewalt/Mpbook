@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0b1020">
+  <meta name="description" content="MPBook convierte EPUB, Markdown y TXT en lectura por voz directamente en el navegador.">
+  <title>MPBook</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand" aria-label="MPBook">
+      <span class="brand-mark">M</span>
+      <div><strong>MPBook</strong><small data-i18n="subtitle">EPUB a audiolibro</small></div>
+    </div>
+    <div class="top-actions">
+      <button id="libraryBtn" class="icon-btn" type="button" data-i18n-title="library" title="Biblioteca">☰</button>
+      <button id="settingsBtn" class="icon-btn" type="button" data-i18n-title="voiceSettings" title="Ajustes de voz">⚙</button>
+      <button id="themeBtn" class="icon-btn" type="button" data-i18n-title="theme" title="Tema">◐</button>
+      <button id="langBtn" class="lang-btn" type="button" aria-label="Cambiar idioma">EN</button>
+    </div>
+  </header>
+
+  <main class="shell">
+    <section id="welcomeView" class="welcome-view">
+      <div class="hero">
+        <span class="eyebrow">MPBook</span>
+        <h1 data-i18n="heroTitle">Convierte tus libros en audio.</h1>
+        <p data-i18n="heroText">Abre un EPUB, Markdown o TXT. El libro se procesa localmente en tu navegador y puedes escucharlo con la voz del sistema o con OpenAI.</p>
+      </div>
+
+      <label id="dropZone" class="drop-zone" for="fileInput">
+        <input id="fileInput" type="file" accept=".epub,.md,.markdown,.txt,application/epub+zip,text/plain,text/markdown" hidden>
+        <span class="drop-icon">＋</span>
+        <strong data-i18n="dropTitle">Suelta tu libro aquí</strong>
+        <span data-i18n="dropText">o toca para elegir un archivo</span>
+        <small>EPUB · MD · TXT</small>
+      </label>
+
+      <div class="or"><span data-i18n="or">o</span></div>
+
+      <section class="paste-card">
+        <div class="section-heading">
+          <div><span class="eyebrow" data-i18n="quickText">Texto rápido</span><h2 data-i18n="pasteTitle">Pega texto para escucharlo</h2></div>
+        </div>
+        <textarea id="pasteInput" rows="7" data-i18n-placeholder="pastePlaceholder" placeholder="Pega aquí el texto que quieres convertir en audio..."></textarea>
+        <button id="loadTextBtn" class="primary-btn" type="button" data-i18n="loadText">Cargar texto</button>
+      </section>
+    </section>
+
+    <section id="readerView" class="reader-view" hidden>
+      <div class="book-head">
+        <button id="backBtn" class="ghost-btn" type="button">← <span data-i18n="home">Inicio</span></button>
+        <div class="book-meta">
+          <span class="eyebrow" id="fileTypeLabel">EPUB</span>
+          <h1 id="bookTitle">Libro</h1>
+          <p id="bookStats"></p>
+        </div>
+        <div class="book-actions">
+          <button id="exportBtn" class="ghost-btn" type="button" data-i18n="exportAudio">Exportar audio</button>
+        </div>
+      </div>
+
+      <div class="reader-toolbar">
+        <label><span data-i18n="chapter">Capítulo</span><select id="chapterSelect"></select></label>
+        <label><span data-i18n="segment">Fragmento</span><select id="segmentSelect"></select></label>
+        <div class="progress-wrap"><span id="progressText">0%</span><div class="progress-track"><div id="progressBar"></div></div></div>
+      </div>
+
+      <article id="readerText" class="reader-text" tabindex="0"></article>
+    </section>
+  </main>
+
+  <footer id="player" class="player" hidden>
+    <div class="now-playing"><span id="nowTitle">MPBook</span><small id="nowChapter"></small></div>
+    <div class="player-controls">
+      <button id="prevBtn" type="button" class="control-btn" data-i18n-title="previous" title="Anterior">⏮</button>
+      <button id="playBtn" type="button" class="play-btn" data-i18n-title="play" title="Reproducir">▶</button>
+      <button id="nextBtn" type="button" class="control-btn" data-i18n-title="next" title="Siguiente">⏭</button>
+    </div>
+    <div class="player-side"><span id="engineBadge">Navegador</span></div>
+  </footer>
+
+  <dialog id="settingsDialog" class="modal">
+    <form method="dialog" class="modal-card" id="settingsForm">
+      <div class="modal-head"><div><span class="eyebrow" data-i18n="audio">Audio</span><h2 data-i18n="voiceSettings">Ajustes de voz</h2></div><button class="icon-btn" value="cancel" type="submit">×</button></div>
+      <div class="form-grid">
+        <label><span data-i18n="engine">Motor de voz</span><select id="engineSelect"><option value="browser" data-i18n="browserVoice">Navegador (gratis)</option><option value="openai">OpenAI</option></select></label>
+        <label><span data-i18n="speechLanguage">Idioma de lectura</span><select id="speechLang"><option value="es-ES">Español</option><option value="es-MX">Español (México)</option><option value="en-US">English (US)</option><option value="en-GB">English (UK)</option><option value="fr-FR">Français</option><option value="de-DE">Deutsch</option><option value="it-IT">Italiano</option><option value="pt-BR">Português</option><option value="ja-JP">日本語</option><option value="ko-KR">한국어</option><option value="zh-TW">中文（台灣）</option></select></label>
+        <label id="browserVoiceRow" class="wide"><span data-i18n="voice">Voz</span><select id="browserVoice"></select></label>
+        <label id="apiKeyRow" class="wide" hidden><span>OpenAI API key</span><input id="openaiKey" type="password" autocomplete="off" placeholder="sk-..."><small data-i18n="keyPrivacy">La clave se guarda solo en este navegador.</small></label>
+        <label id="modelRow" hidden><span data-i18n="model">Modelo</span><select id="openaiModel"><option value="gpt-4o-mini-tts">gpt-4o-mini-tts</option><option value="tts-1">tts-1</option><option value="tts-1-hd">tts-1-hd</option></select></label>
+        <label id="openaiVoiceRow" hidden><span data-i18n="voice">Voz</span><select id="openaiVoice"><option value="alloy">alloy</option><option value="ash">ash</option><option value="ballad">ballad</option><option value="coral">coral</option><option value="echo">echo</option><option value="fable">fable</option><option value="nova">nova</option><option value="onyx">onyx</option><option value="sage">sage</option><option value="shimmer">shimmer</option></select></label>
+        <label><span data-i18n="speed">Velocidad</span><input id="rateInput" type="range" min="0.6" max="1.6" step="0.05"><output id="rateOutput">1.00×</output></label>
+        <label id="pitchRow"><span data-i18n="pitch">Tono</span><input id="pitchInput" type="range" min="0.5" max="1.5" step="0.05"><output id="pitchOutput">1.00</output></label>
+      </div>
+      <div class="modal-actions"><button id="testVoiceBtn" type="button" class="ghost-btn" data-i18n="testVoice">Probar voz</button><button id="saveSettingsBtn" type="submit" value="default" class="primary-btn" data-i18n="save">Guardar</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="libraryDialog" class="modal">
+    <div class="modal-card library-card">
+      <div class="modal-head"><div><span class="eyebrow">MPBook</span><h2 data-i18n="library">Biblioteca</h2></div><button id="closeLibraryBtn" class="icon-btn" type="button">×</button></div>
+      <div id="libraryList" class="library-list"></div>
+      <p id="emptyLibrary" class="empty-state" data-i18n="emptyLibrary">Todavía no has cargado ningún libro.</p>
+    </div>
+  </dialog>
+
+  <dialog id="exportDialog" class="modal">
+    <div class="modal-card">
+      <div class="modal-head"><div><span class="eyebrow" data-i18n="export">Exportar</span><h2 data-i18n="exportAudio">Exportar audio</h2></div><button id="closeExportBtn" class="icon-btn" type="button">×</button></div>
+      <p id="exportInfo" data-i18n="exportOpenAIOnly">La exportación usa OpenAI y genera un MP3 con los fragmentos del libro.</p>
+      <div class="export-progress"><div class="progress-track"><div id="exportBar"></div></div><span id="exportStatus">0%</span></div>
+      <div class="modal-actions"><button id="cancelExportBtn" class="ghost-btn" type="button" data-i18n="cancel">Cancelar</button><button id="startExportBtn" class="primary-btn" type="button" data-i18n="startExport">Generar MP3</button></div>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="./app.js" defer></script>
+</body>
+</html>
