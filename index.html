@@ -29,7 +29,7 @@
       <div class="hero">
         <span class="eyebrow">MPBook</span>
         <h1 data-i18n="heroTitle">Convierte tus libros en audio.</h1>
-        <p data-i18n="heroText">Abre un EPUB, Markdown o TXT. El libro se procesa localmente en tu navegador y puedes escucharlo con la voz del sistema o con OpenAI.</p>
+        <p data-i18n="heroText">Abre un EPUB, Markdown o TXT. El libro se procesa localmente en tu navegador y puedes escucharlo con la voz del sistema, una voz natural local o con OpenAI.</p>
       </div>
 
       <label id="dropZone" class="drop-zone" for="fileInput">
@@ -113,16 +113,15 @@
   <dialog id="exportDialog" class="modal">
     <div class="modal-card">
       <div class="modal-head"><div><span class="eyebrow" data-i18n="export">Exportar</span><h2 data-i18n="exportAudio">Exportar audio</h2></div><button id="closeExportBtn" class="icon-btn" type="button">×</button></div>
-      <p id="exportInfo" data-i18n="exportOpenAIOnly">Elige cómo quieres generar el audiolibro.</p>
+      <p id="exportInfo">Elige cómo quieres generar el audiolibro.</p>
       <div class="export-progress"><div class="progress-track"><div id="exportBar"></div></div><span id="exportStatus">0%</span></div>
       <div class="modal-actions"><button id="cancelExportBtn" class="ghost-btn" type="button" data-i18n="cancel">Cancelar</button><button id="startExportBtn" class="primary-btn" type="button">Generar audio</button></div>
     </div>
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="./performance.js?v=12"></script>
-  <script src="./export-audio.js?v=12"></script>
-  <script src="./app.js?v=12" defer></script>
-  <script type="module" src="./local-tts.js?v=12"></script>
+  <script src="./app-v2.js?v=14" defer></script>
+  <script src="./export-audio.js?v=14" defer></script>
+  <script type="module" src="./local-tts.js?v=14"></script>
 </body>
 </html>
