@@ -7,7 +7,8 @@
   const VOICE_CACHE_NAME = "mpbook-kokoro-voices-v1";
   const SAMPLE_RATE = 24000;
   const STYLE_DIM = 256;
-  const MAX_CHARS = 300;
+  const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  const MAX_CHARS = IS_MOBILE ? 180 : 300;
 
   let runtimePromise = null;
   const voiceMemory = new Map();
@@ -116,7 +117,7 @@
 
       const [model, tokenizer] = await Promise.all([
         hf.StyleTextToSpeech2Model.from_pretrained(MODEL_ID, {
-          dtype: "q8",
+          dtype: IS_MOBILE ? "q4" : "q8",
           device: "wasm",
           progress_callback,
         }),
