@@ -1,129 +1,2556 @@
-<!doctype html>
-<html lang="es">
+<!DOCTYPE html>
+<html lang="zh-Hant">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#0b1020">
-  <meta name="description" content="MPBook convierte EPUB, Markdown y TXT en lectura por voz directamente en el navegador.">
-  <title>MPBook</title>
-  <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="icon" href="./icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#fafaf7" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="有聲書" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="icon" type="image/svg+xml" href="icon.svg" />
+<title>Audiobook｜有聲書</title>
+<style>
+  :root {
+    /* CIS：Blue 主 60 / Teal 副 30 / Amber 點綴 10，紙色底 */
+    --bg: #fafaf7;
+    --bg-elev: #ffffff;
+    --bg-elev2: #f3f3ef;
+    --line: #e5e5e0;
+    --text: #1a1a1a;
+    --text-dim: #666666;
+    --accent: #004aad;
+    --accent-press: #003a8c;
+    --good: #0097b2;
+    --warn: #9a6700;
+    --danger: #c0392b;
+    --grad: linear-gradient(135deg, #004aad 0%, #0097b2 100%);
+    --line-strong: #c9c9c2;
+    --player-fade: rgba(250,250,247,.65);
+    --radius: 14px;
+    --tap: 48px;
+    --hl: rgba(255, 189, 89, .45);
+  }
+  /* 深色：CIS 同色相提亮（深底上主色藍對比不足） */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+    --bg: #12161d;
+    --bg-elev: #1a202a;
+    --bg-elev2: #232b38;
+    --line: #2c3442;
+    --text: #e8eaee;
+    --text-dim: #9aa3b2;
+    --accent: #4d8dff;
+    --accent-press: #3a78ec;
+    --good: #2fb6cc;
+    --warn: #ffbd59;
+    --danger: #ff6b6b;
+    --grad: linear-gradient(135deg, #4d8dff 0%, #2fb6cc 100%);
+    --line-strong: #3d4757;
+    --player-fade: rgba(18,22,29,.65);
+    --hl: rgba(255, 189, 89, .3);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12161d;
+    --bg-elev: #1a202a;
+    --bg-elev2: #232b38;
+    --line: #2c3442;
+    --text: #e8eaee;
+    --text-dim: #9aa3b2;
+    --accent: #4d8dff;
+    --accent-press: #3a78ec;
+    --good: #2fb6cc;
+    --warn: #ffbd59;
+    --danger: #ff6b6b;
+    --grad: linear-gradient(135deg, #4d8dff 0%, #2fb6cc 100%);
+    --line-strong: #3d4757;
+    --player-fade: rgba(18,22,29,.65);
+    --hl: rgba(255, 189, 89, .3);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  /* hidden 屬性永遠生效：class 設了 display（.btn/.icon-btn/.modal-back…）也蓋不掉 */
+  [hidden] { display: none !important; }
+  html, body { margin: 0; padding: 0; height: 100%; overflow-x: hidden; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC",
+                 "PingFang TC", "Microsoft JhengHei", Roboto, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+    -webkit-font-smoothing: antialiased;
+  }
+  header {
+    padding: calc(env(safe-area-inset-top) + 14px) 18px 12px;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--bg);
+    position: sticky;
+    top: 0;
+    z-index: 20;
+  }
+  header .logo {
+    width: 30px; height: 30px; flex: 0 0 auto;
+  }
+  header h1 {
+    font-size: 17px; font-weight: 650; margin: 0; letter-spacing: .5px;
+  }
+  header .sub { font-size: 12px; color: var(--text-dim); margin-top: 1px; }
+  header .spacer { flex: 1; }
+  .icon-btn {
+    width: var(--tap); height: var(--tap); border: none; background: transparent;
+    color: var(--text-dim); cursor: pointer; border-radius: 12px;
+    display: inline-flex; align-items: center; justify-content: center;
+    transition: background .15s, color .15s;
+  }
+  .icon-btn:hover { background: var(--bg-elev); color: var(--text); }
+  .icon-btn svg { width: 22px; height: 22px; }
+
+  main {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 16px 16px 180px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* 輸入區 */
+  .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+  .tab {
+    flex: 1; min-height: var(--tap); border: 1px solid var(--line);
+    background: var(--bg-elev); color: var(--text-dim); border-radius: 12px;
+    font-size: 14px; cursor: pointer; transition: .15s;
+  }
+  .tab.active { background: var(--bg-elev2); color: var(--text); border-color: var(--accent); }
+
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .dropzone {
+    border: 1.5px dashed var(--line); border-radius: var(--radius);
+    padding: 28px 18px; text-align: center; color: var(--text-dim);
+    background: var(--bg-elev); cursor: pointer; transition: .15s;
+  }
+  .dropzone:hover, .dropzone.drag { border-color: var(--accent); color: var(--text); background: var(--bg-elev2); }
+  .dropzone strong { color: var(--text); display: block; margin-bottom: 4px; font-size: 15px; }
+  .dropzone small { font-size: 12px; }
+
+  textarea {
+    width: 100%; min-height: 200px; resize: vertical; border-radius: var(--radius);
+    border: 1px solid var(--line); background: var(--bg-elev); color: var(--text);
+    padding: 14px; font-size: 15px; line-height: 1.7; font-family: inherit;
+  }
+  textarea:focus { outline: none; border-color: var(--accent); }
+
+  .row { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+  .btn {
+    min-height: var(--tap); padding: 0 18px; border-radius: 12px; border: none;
+    font-size: 15px; font-weight: 600; cursor: pointer; transition: .15s;
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .btn-primary { background: var(--accent); color: #fff; flex: 1; }
+  .btn-primary:active { background: var(--accent-press); }
+  .btn-ghost { background: var(--bg-elev2); color: var(--text); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+
+  /* 設定面板（覆蓋式抽屜，由頂欄齒輪鈕開啟，讀到任何位置都能調） */
+  .settings-body { padding: 0 2px 4px; }
+  #topBtn {
+    position: fixed; right: 16px; bottom: calc(env(safe-area-inset-bottom) + 180px); z-index: 40;
+    width: 44px; height: 44px; border-radius: 50%;
+    background: var(--bg-elev2); border: 1px solid var(--line); color: var(--text);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, .18);
+  }
+  .now-row .now { cursor: pointer; }
+  @media (max-width: 359px) {
+    .controls { gap: 3px; }
+    .rate-btn { width: 28px; }
+  }
+  .field { margin-top: 14px; }
+  .field label { display: block; font-size: 13px; color: var(--text-dim); margin-bottom: 6px; }
+  .field input[type=text], .field input[type=password], .field select {
+    width: 100%; min-height: var(--tap); border-radius: 10px; border: 1px solid var(--line);
+    background: var(--bg-elev2); color: var(--text); padding: 0 12px; font-size: 15px;
+    font-family: inherit;
+  }
+  .field input:focus, .field select:focus { outline: none; border-color: var(--accent); }
+  .field-row { display: flex; gap: 10px; }
+  .field-row > .field { flex: 1; margin-top: 14px; }
+  .range-wrap { display: flex; align-items: center; gap: 12px; }
+  .range-wrap input[type=range] { flex: 1; accent-color: var(--accent); height: var(--tap); }
+  .range-val { font-variant-numeric: tabular-nums; min-width: 42px; text-align: right; color: var(--text); }
+  .hint { font-size: 12px; color: var(--text-dim); margin-top: 6px; line-height: 1.5; }
+  .hint.warn { color: var(--warn); }
+
+  /* 段落清單 */
+  .seg-meta { display: flex; align-items: center; justify-content: space-between;
+    margin: 18px 4px 10px; font-size: 13px; color: var(--text-dim); }
+  .seg-meta[hidden] { display: none; }
+  .seg-list { display: flex; flex-direction: column; gap: 8px; }
+  .seg {
+    border: 1px solid var(--line); background: var(--bg-elev); border-radius: 12px;
+    padding: 12px 14px; cursor: pointer; transition: .12s; position: relative;
+    display: flex; gap: 12px; align-items: flex-start;
+  }
+  .seg:hover { border-color: var(--line-strong); }
+  .seg .num {
+    flex: 0 0 auto; font-size: 12px; color: var(--text-dim);
+    font-variant-numeric: tabular-nums; min-width: 26px; padding-top: 2px;
+  }
+  .seg .txt { flex: 1; font-size: 14.5px; color: var(--text-dim); overflow-wrap: anywhere; min-width: 0; }
+  .seg.cur { border-color: var(--accent); background: var(--bg-elev2); }
+  .seg.cur .txt { color: var(--text); }
+  .seg.done .num { color: var(--good); }
+  .seg .state { flex: 0 0 auto; width: 16px; height: 16px; margin-top: 3px; }
+  .seg .txt mark.hl {
+    background: var(--hl); color: inherit; border-radius: 3px;
+    cursor: pointer; padding: 1px 0;
+  }
+  .seg .txt mark.hl.hasnote { border-bottom: 2px dotted var(--warn); }
+
+  .empty { text-align: center; color: var(--text-dim); padding: 40px 16px; font-size: 14px; }
+
+  /* 書庫 */
+  .lib-list { display: flex; flex-direction: column; gap: 8px; }
+  .lib-item {
+    border: 1px solid var(--line); background: var(--bg-elev); border-radius: 12px;
+    padding: 4px 4px 4px 14px; display: flex; align-items: center; gap: 8px;
+    cursor: pointer; transition: .12s;
+  }
+  .lib-item:hover { border-color: var(--line-strong); }
+  .lib-main { flex: 1; min-width: 0; padding: 8px 0; }
+  .lib-title {
+    font-size: 14.5px; font-weight: 600; color: var(--text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .lib-sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+  .lib-del { flex: 0 0 auto; }
+
+  /* 底部播放列 */
+  .player {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+    background: linear-gradient(180deg, var(--player-fade), var(--bg) 30%);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border-top: 1px solid var(--line);
+    padding: 12px 16px calc(env(safe-area-inset-bottom) + 12px);
+    transform: translateY(110%); transition: transform .25s ease;
+  }
+  .player.show { transform: translateY(0); }
+  .progress { height: 4px; background: var(--bg-elev2); border-radius: 4px; overflow: hidden; margin-bottom: 10px; }
+  .progress > i { display: block; height: 100%; width: 0; background: var(--grad); transition: width .25s; }
+  .now { font-size: 13px; color: var(--text-dim); margin-bottom: 10px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .now b { color: var(--text); font-weight: 600; }
+  .now-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .now-row .now { flex: 1; min-width: 0; margin-bottom: 0; }
+  .now-row .status-pill { margin-left: 0; flex: none; }
+  .rate-btn { width: 34px; height: 40px; font-size: 19px; font-weight: 600; border-radius: 10px; }
+  #rateVal {
+    font-size: 12px; color: var(--text-dim); flex: none;
+    cursor: pointer; font-variant-numeric: tabular-nums;
+  }
+  .controls { display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .controls .icon-btn { color: var(--text); }
+  .controls .play {
+    width: 60px; height: 60px; border-radius: 50%; background: var(--accent); color: #fff;
+  }
+  .controls .play:hover { background: var(--accent-press); }
+  .controls .play svg { width: 28px; height: 28px; }
+  .status-pill {
+    font-size: 11px; color: var(--text-dim); margin-left: auto;
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  .status-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-dim); }
+  .status-pill.loading .dot { background: var(--warn); animation: pulse 1s infinite; }
+  .status-pill.playing .dot { background: var(--good); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 120px; transform: translateX(-50%) translateY(20px);
+    background: var(--bg-elev2); color: var(--text); border: 1px solid var(--line);
+    padding: 12px 18px; border-radius: 12px; font-size: 14px; z-index: 50;
+    opacity: 0; transition: .25s; max-width: 90vw; text-align: center;
+    box-shadow: 0 8px 30px rgba(0,0,0,.14);
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.err { border-color: var(--danger); }
+
+  /* modal（重點編輯／匯出共用） */
+  .modal-back {
+    position: fixed; inset: 0; background: rgba(0, 0, 0, .45); z-index: 70;
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal-back[hidden] { display: none; }
+  .modal {
+    background: var(--bg-elev); border: 1px solid var(--line); border-radius: var(--radius);
+    max-width: 480px; width: 100%; max-height: 80vh; overflow-y: auto; padding: 18px;
+    overscroll-behavior: contain; -webkit-overflow-scrolling: touch; /* 手機上自己捲，不把捲動鏈到背景 */
+  }
+  .modal h3 { margin: 0 0 10px; font-size: 16px; }
+  .modal .quote {
+    border-left: 3px solid var(--warn); background: var(--bg-elev2);
+    padding: 8px 12px; border-radius: 6px; font-size: 14px; color: var(--text-dim);
+    max-height: 110px; overflow-y: auto; margin-bottom: 12px;
+  }
+  #selMarkBtn { position: fixed; z-index: 60; min-height: 40px; padding: 0 14px; font-size: 14px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, .2); }
+  #selMarkBtn[hidden] { display: none; } /* .btn 的 display 會蓋掉 hidden 屬性，必須明寫 */
+</style>
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand" aria-label="MPBook">
-      <span class="brand-mark">M</span>
-      <div><strong>MPBook</strong><small data-i18n="subtitle">EPUB a audiolibro</small></div>
-    </div>
-    <div class="top-actions">
-      <button id="libraryBtn" class="icon-btn" type="button" data-i18n-title="library" title="Biblioteca">☰</button>
-      <button id="settingsBtn" class="icon-btn" type="button" data-i18n-title="voiceSettings" title="Ajustes de voz">⚙</button>
-      <button id="themeBtn" class="icon-btn" type="button" data-i18n-title="theme" title="Tema">◐</button>
-      <button id="langBtn" class="lang-btn" type="button" aria-label="Cambiar idioma">EN</button>
-    </div>
-  </header>
 
-  <main class="shell">
-    <section id="welcomeView" class="welcome-view">
-      <div class="hero">
-        <span class="eyebrow">MPBook</span>
-        <h1 data-i18n="heroTitle">Convierte tus libros en audio.</h1>
-        <p data-i18n="heroText">Abre un EPUB, Markdown o TXT. El libro se procesa localmente en tu navegador y puedes escucharlo con la voz del sistema, una voz natural local o con OpenAI.</p>
+<header>
+  <svg class="logo" viewBox="0 0 24 24" fill="none" stroke="#004aad" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 5.5C3 4.7 3.7 4 4.5 4H11v15H4.5C3.7 19 3 18.3 3 17.5V5.5Z"/>
+    <path d="M21 5.5C21 4.7 20.3 4 19.5 4H13v15h6.5c.8 0 1.5-.7 1.5-1.5V5.5Z"/>
+    <path d="M16.5 9.5a2 2 0 0 1 0 4"/>
+  </svg>
+  <div>
+    <h1>Audiobook｜有聲書</h1>
+    <div class="sub">EPUB / Markdown 朗讀 · 雲端高音質</div>
+  </div>
+  <div class="spacer"></div>
+  <button class="icon-btn" id="settingsBtn" title="語音設定">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="2" y1="14" x2="6" y2="14"/><line x1="10" y1="8" x2="14" y2="8"/><line x1="18" y1="16" x2="22" y2="16"/></svg>
+  </button>
+  <button class="icon-btn" id="themeBtn" title="切換外觀">
+    <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></svg>
+  </button>
+  <button class="icon-btn" id="installBtn" title="加到主畫面" hidden>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M5 21h14"/></svg>
+  </button>
+</header>
+
+<main>
+  <!-- 輸入切換 -->
+  <div class="tabs">
+    <button class="tab active" data-tab="file">選檔</button>
+    <button class="tab" data-tab="paste">貼上文字</button>
+    <button class="tab" data-tab="lib">書庫</button>
+    <button class="tab" data-tab="marks">重點</button>
+  </div>
+
+  <div class="panel active" data-panel="file">
+    <div class="dropzone" id="dropzone">
+      <strong>點此選檔，或拖曳檔案進來</strong>
+      <small>支援 .epub（建議，書籍首選）/ .md / .txt</small>
+      <input type="file" id="fileInput" accept=".epub,application/epub+zip,.md,.markdown,.txt,text/markdown,text/plain" hidden />
+    </div>
+  </div>
+
+  <div class="panel" data-panel="paste">
+    <textarea id="pasteArea" placeholder="把 Markdown 或純文字貼進來……"></textarea>
+  </div>
+
+  <div class="panel" data-panel="lib">
+    <div class="lib-list" id="libList"></div>
+    <div class="empty" id="libEmpty" style="padding:24px 16px">還沒有紀錄。載入過的文件會自動存進書庫，並記住聽到第幾段。</div>
+  </div>
+
+  <div class="panel" data-panel="marks">
+    <div class="row" style="margin:0 0 12px">
+      <button class="btn btn-ghost" id="marksDlBtn" disabled>下載 .md</button>
+      <button class="btn btn-ghost" id="marksCopyBtn" disabled>複製</button>
+    </div>
+    <div id="marksList"></div>
+    <div class="empty" id="marksEmpty" style="padding:24px 16px">還沒有重點。播放時按播放列的「標記」鈕，或直接在段落文字上選取一段按「標重點」。</div>
+  </div>
+
+  <div class="row">
+    <button class="btn btn-primary" id="loadBtn">載入並切段</button>
+    <button class="btn btn-ghost" id="clearBtn">清空</button>
+  </div>
+
+  <!-- 章節導覽 -->
+  <div class="field" id="chapterNav" hidden style="margin:18px 0 0">
+    <label>章節（點選跳播）</label>
+    <select id="chapterSel"></select>
+  </div>
+
+  <!-- 段落 -->
+  <div class="seg-meta" id="segMeta" hidden>
+    <span id="segCount">0 段</span>
+    <button class="btn btn-ghost" id="exportBtn" style="min-height:36px;padding:0 14px;font-size:13px">匯出音檔</button>
+    <span id="segChars">0 字</span>
+  </div>
+  <div class="hint" id="markHint" hidden style="margin:0 4px 10px;line-height:1.7">
+    畫重點兩條路：播放中按底部的「標記」鈕，記住現在唸到的句子；或直接在下面的段落文字上拖選一段，點跳出來的「標重點」。標過的重點點一下可以寫筆記。
+  </div>
+  <div class="seg-list" id="segList"></div>
+  <div class="empty" id="emptyState">載入一本 EPUB 或一份 Markdown，就能開始聽。</div>
+</main>
+
+<!-- 播放控制列 -->
+<div class="player" id="player">
+  <div class="progress"><i id="progressBar"></i></div>
+  <div class="now-row">
+    <div class="now" id="nowText">準備中……</div>
+    <span id="rateVal" title="播放速度（點一下回 1.0×）">1.0×</span>
+    <span class="status-pill" id="statusPill"><span class="dot"></span><span id="statusText">待機</span></span>
+  </div>
+  <div class="controls">
+    <button class="btn btn-ghost" id="markBtn" title="標記現在唸到的句子"
+            style="min-height:40px;padding:0 12px;font-size:13px;gap:5px;border:1px solid var(--line)">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M6 4h12v17l-6-4-6 4z"/></svg>標記
+    </button>
+    <button class="icon-btn rate-btn" id="rateDownBtn" title="減速">－</button>
+    <button class="icon-btn" id="prevBtn" title="上一段">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6zM20 5v14l-11-7z"/></svg>
+    </button>
+    <button class="icon-btn play" id="playBtn" title="播放/暫停">
+      <svg id="playIcon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+    </button>
+    <button class="icon-btn" id="nextBtn" title="下一段">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM4 5l11 7-11 7z"/></svg>
+    </button>
+    <button class="icon-btn rate-btn" id="rateUpBtn" title="加速">＋</button>
+  </div>
+</div>
+
+<button class="btn btn-primary" id="selMarkBtn" hidden>標重點</button>
+
+<!-- 設定（覆蓋式抽屜，頂欄齒輪鈕開啟） -->
+  <div class="modal-back" id="settingsBack" hidden>
+    <div class="modal">
+    <h3>語音設定</h3>
+    <input type="hidden" id="theme" value="auto" />
+    <div class="settings-body">
+      <div class="field">
+        <label>語音引擎</label>
+        <select id="provider">
+          <option value="openai">OpenAI（雲端高音質，需 API key）</option>
+          <option value="google">Google Cloud（每月 100 萬字元免費，需 API key）</option>
+          <option value="azure">Azure（台灣腔音色最齊，需 key＋region）</option>
+          <option value="gemini">Gemini（AI Studio key 直接用，有免費層）</option>
+          <option value="browser">瀏覽器內建（免費，免 key）</option>
+        </select>
       </div>
 
-      <label id="dropZone" class="drop-zone" for="fileInput">
-        <input id="fileInput" type="file" accept=".epub,.md,.markdown,.txt,application/epub+zip,text/plain,text/markdown" hidden>
-        <span class="drop-icon">＋</span>
-        <strong data-i18n="dropTitle">Suelta tu libro aquí</strong>
-        <span data-i18n="dropText">o toca para elegir un archivo</span>
-        <small>EPUB · MD · TXT</small>
-      </label>
-
-      <div class="or"><span data-i18n="or">o</span></div>
-
-      <section class="paste-card">
-        <div class="section-heading">
-          <div><span class="eyebrow" data-i18n="quickText">Texto rápido</span><h2 data-i18n="pasteTitle">Pega texto para escucharlo</h2></div>
+      <div class="field-row">
+        <div class="field">
+          <label>語系</label>
+          <select id="lang">
+            <option value="auto">自動偵測</option>
+            <option value="zh-TW">中文（台灣）</option>
+            <option value="zh">中文（通用）</option>
+            <option value="en">英文</option>
+            <option value="ja">日文</option>
+            <option value="ko">韓文</option>
+          </select>
         </div>
-        <textarea id="pasteInput" rows="7" data-i18n-placeholder="pastePlaceholder" placeholder="Pega aquí el texto que quieres convertir en audio..."></textarea>
-        <button id="loadTextBtn" class="primary-btn" type="button" data-i18n="loadText">Cargar texto</button>
-      </section>
-    </section>
-
-    <section id="readerView" class="reader-view" hidden>
-      <div class="book-head">
-        <button id="backBtn" class="ghost-btn" type="button">← <span data-i18n="home">Inicio</span></button>
-        <div class="book-meta">
-          <span class="eyebrow" id="fileTypeLabel">EPUB</span>
-          <h1 id="bookTitle">Libro</h1>
-          <p id="bookStats"></p>
-        </div>
-        <div class="book-actions">
-          <button id="exportBtn" class="ghost-btn" type="button" data-i18n="exportAudio">Exportar audio</button>
+        <div class="field">
+          <label>聲色</label>
+          <select id="gender">
+            <option value="any">不指定</option>
+            <option value="f">女聲</option>
+            <option value="m">男聲</option>
+          </select>
         </div>
       </div>
+      <div class="hint">語系與聲色會篩選下面的音色清單。Google／Azure 有各語系專屬音色；OpenAI／Gemini 的音色多語通用、自動跟著文本語言（OpenAI 口音可靠語氣指示）；瀏覽器引擎篩系統語音。</div>
 
-      <div class="reader-toolbar">
-        <label><span data-i18n="chapter">Capítulo</span><select id="chapterSelect"></select></label>
-        <label><span data-i18n="segment">Fragmento</span><select id="segmentSelect"></select></label>
-        <div class="progress-wrap"><span id="progressText">0%</span><div class="progress-track"><div id="progressBar"></div></div></div>
+      <div id="cloudFields">
+        <div class="field" data-p="openai">
+          <label>OpenAI API Key（只存在本機，不會上傳）</label>
+          <input type="password" id="apiKey" placeholder="sk-..." autocomplete="off" />
+          <div class="hint">tts-1 系列按字計費，中文長書最划算的付費選項。</div>
+        </div>
+        <div class="field" data-p="google">
+          <label>Google Cloud API Key（只存在本機，不會上傳）</label>
+          <input type="password" id="gKey" placeholder="AIza..." autocomplete="off" />
+          <div class="hint">GCP 主控台啟用 Cloud Text-to-Speech API 後建立 API key（⚠️ AI Studio 的 key 不能用在這裡，要用請選 Gemini 引擎）。每月前 100 萬字元免費（Wavenet／Standard 到 400 萬），一般聽量全程免費。</div>
+        </div>
+        <div class="field" data-p="gemini">
+          <label>Gemini API Key（AI Studio 取得，只存在本機）</label>
+          <input type="password" id="gemKey" placeholder="AIza..." autocomplete="off" />
+          <div class="hint">aistudio.google.com 免費取得。有免費層（限流）；付費按音訊時長計費，中文長書比按字計費的引擎貴，適合試聽與輕量使用。</div>
+        </div>
+        <div data-p="azure">
+          <div class="field-row">
+            <div class="field">
+              <label>Azure Speech Key</label>
+              <input type="password" id="aKey" autocomplete="off" />
+            </div>
+            <div class="field">
+              <label>Region（資源區域）</label>
+              <input type="text" id="aRegion" placeholder="eastasia" />
+            </div>
+          </div>
+          <div class="hint">Azure 入口網站建 Speech 資源後拿 key 與 region（台灣用戶常用 eastasia）。</div>
+        </div>
+        <div class="field-row">
+          <div class="field" id="modelField">
+            <label>模型</label>
+            <select id="model"></select>
+          </div>
+          <div class="field">
+            <label>音色</label>
+            <select id="voice"></select>
+          </div>
+        </div>
+        <div class="field" id="instructionsField" data-p="openai">
+          <label>語氣指示（僅 gpt-4o-mini-tts，可留空）</label>
+          <input type="text" id="instructions" placeholder="例：用沉穩、像說書人的語氣，自然斷句" />
+        </div>
+        <div class="hint">播放時由你的瀏覽器直連所選引擎的 API，內容不經過任何中間伺服器；各家 key 分開記住，切換引擎不用重填。</div>
       </div>
 
-      <article id="readerText" class="reader-text" tabindex="0"></article>
-    </section>
-  </main>
-
-  <footer id="player" class="player" hidden>
-    <div class="now-playing"><span id="nowTitle">MPBook</span><small id="nowChapter"></small></div>
-    <div class="player-controls">
-      <button id="prevBtn" type="button" class="control-btn" data-i18n-title="previous" title="Anterior">⏮</button>
-      <button id="playBtn" type="button" class="play-btn" data-i18n-title="play" title="Reproducir">▶</button>
-      <button id="nextBtn" type="button" class="control-btn" data-i18n-title="next" title="Siguiente">⏭</button>
-    </div>
-    <div class="player-side"><span id="engineBadge">Navegador</span></div>
-  </footer>
-
-  <dialog id="settingsDialog" class="modal">
-    <form method="dialog" class="modal-card" id="settingsForm">
-      <div class="modal-head"><div><span class="eyebrow" data-i18n="audio">Audio</span><h2 data-i18n="voiceSettings">Ajustes de voz</h2></div><button class="icon-btn" value="cancel" type="submit">×</button></div>
-      <div class="form-grid">
-        <label><span data-i18n="engine">Motor de voz</span><select id="engineSelect"><option value="browser" data-i18n="browserVoice">Navegador (gratis)</option><option value="natural">Natural local (gratis)</option><option value="openai">OpenAI</option></select></label>
-        <label><span data-i18n="speechLanguage">Idioma de lectura</span><select id="speechLang"><option value="es-ES">Español</option><option value="es-MX">Español (México)</option><option value="en-US">English (US)</option><option value="en-GB">English (UK)</option><option value="fr-FR">Français</option><option value="de-DE">Deutsch</option><option value="it-IT">Italiano</option><option value="pt-BR">Português</option><option value="ja-JP">日本語</option><option value="ko-KR">한국어</option><option value="zh-TW">中文（台灣）</option></select></label>
-        <label id="browserVoiceRow" class="wide"><span data-i18n="voice">Voz</span><select id="browserVoice"></select></label>
-        <label id="naturalVoiceRow" class="wide" hidden><span>Voz natural local</span><select id="naturalVoice"></select><small id="naturalNote"></small><small id="naturalStatus" style="display:block;margin-top:.4rem"></small></label>
-        <label id="apiKeyRow" class="wide" hidden><span>OpenAI API key</span><input id="openaiKey" type="password" autocomplete="off" placeholder="sk-..."><small data-i18n="keyPrivacy">La clave se guarda solo en este navegador.</small></label>
-        <label id="modelRow" hidden><span data-i18n="model">Modelo</span><select id="openaiModel"><option value="gpt-4o-mini-tts">gpt-4o-mini-tts</option><option value="tts-1">tts-1</option><option value="tts-1-hd">tts-1-hd</option></select></label>
-        <label id="openaiVoiceRow" hidden><span data-i18n="voice">Voz</span><select id="openaiVoice"><option value="alloy">alloy</option><option value="ash">ash</option><option value="ballad">ballad</option><option value="coral">coral</option><option value="echo">echo</option><option value="fable">fable</option><option value="nova">nova</option><option value="onyx">onyx</option><option value="sage">sage</option><option value="shimmer">shimmer</option></select></label>
-        <label><span data-i18n="speed">Velocidad</span><input id="rateInput" type="range" min="0.6" max="1.6" step="0.05"><output id="rateOutput">1.00×</output></label>
-        <label id="pitchRow"><span data-i18n="pitch">Tono</span><input id="pitchInput" type="range" min="0.5" max="1.5" step="0.05"><output id="pitchOutput">1.00</output></label>
+      <div id="browserFields" hidden>
+        <div class="field">
+          <label>系統語音</label>
+          <select id="browserVoice"></select>
+          <div class="hint">用手機作業系統內建的語音，免費、可離線，但中文自然度視機型而定。</div>
+        </div>
       </div>
-      <div class="modal-actions"><button id="testVoiceBtn" type="button" class="ghost-btn" data-i18n="testVoice">Probar voz</button><button id="saveSettingsBtn" type="submit" value="default" class="primary-btn" data-i18n="save">Guardar</button></div>
-    </form>
-  </dialog>
 
-  <dialog id="libraryDialog" class="modal">
-    <div class="modal-card library-card">
-      <div class="modal-head"><div><span class="eyebrow">MPBook</span><h2 data-i18n="library">Biblioteca</h2></div><button id="closeLibraryBtn" class="icon-btn" type="button">×</button></div>
-      <div id="libraryList" class="library-list"></div>
-      <p id="emptyLibrary" class="empty-state" data-i18n="emptyLibrary">Todavía no has cargado ningún libro.</p>
+      <div class="field">
+        <label><input type="checkbox" id="segAuto" checked style="vertical-align:-2px"> 每段最長字數自動配（依引擎）<span class="range-val" id="segLenVal">2500</span></label>
+        <div class="range-wrap">
+          <input type="range" id="segLen" min="300" max="4000" step="100" value="2500" />
+        </div>
+        <div class="hint">自動配會依所選引擎與模型抓單次請求的甜蜜點（換引擎不用自己記數字）；取消勾選可手動指定。數字越大朗讀越連貫、接縫越少，但首段等待越久。</div>
+      </div>
+
+      <div class="field">
+        <label><input type="checkbox" id="skipCode" checked style="vertical-align:-2px"> 跳過程式碼區塊不朗讀</label>
+      </div>
+      <div class="field">
+        <label><input type="checkbox" id="useCache" checked style="vertical-align:-2px"> 快取已合成語音（重播 / 重開省 API 費用）</label>
+      </div>
+      <div class="row" style="margin-top:16px">
+        <button class="btn btn-primary" id="settingsCloseBtn">完成</button>
+        <button class="btn btn-ghost" id="clearCacheBtn">清空語音快取</button>
+      </div>
     </div>
-  </dialog>
-
-  <dialog id="exportDialog" class="modal">
-    <div class="modal-card">
-      <div class="modal-head"><div><span class="eyebrow" data-i18n="export">Exportar</span><h2 data-i18n="exportAudio">Exportar audio</h2></div><button id="closeExportBtn" class="icon-btn" type="button">×</button></div>
-      <p id="exportInfo">Elige cómo quieres generar el audiolibro.</p>
-      <div class="export-progress"><div class="progress-track"><div id="exportBar"></div></div><span id="exportStatus">0%</span></div>
-      <div class="modal-actions"><button id="cancelExportBtn" class="ghost-btn" type="button" data-i18n="cancel">Cancelar</button><button id="startExportBtn" class="primary-btn" type="button">Generar audio</button></div>
     </div>
-  </dialog>
+  </div>
 
-  <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="./app-v2.js?v=17" defer></script>
-  <script src="./fast-docs.js?v=17" defer></script>
-  <script src="./settings-bridge.js?v=17" defer></script>
-  <script src="./export-audio.js?v=17" defer></script>
-  <script type="module" src="./local-tts.js?v=17"></script>
+
+<button class="icon-btn" id="topBtn" hidden title="回頂部">
+  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><line x1="5" y1="12" x2="12" y2="5"/><line x1="19" y1="12" x2="12" y2="5"/></svg>
+</button>
+
+<div class="modal-back" id="markModalBack" hidden>
+  <div class="modal">
+    <h3>重點</h3>
+    <div class="quote" id="markQuote"></div>
+    <textarea id="markNote" placeholder="寫一點筆記（可留空）……" style="min-height:100px"></textarea>
+    <div class="row">
+      <button class="btn btn-primary" id="markSaveBtn">儲存</button>
+      <button class="btn btn-ghost" id="markDelBtn" style="color:var(--danger)">刪除重點</button>
+      <button class="btn btn-ghost" id="markCloseBtn">關閉</button>
+    </div>
+  </div>
+</div>
+<div class="modal-back" id="exportModalBack" hidden>
+  <div class="modal">
+    <h3>匯出音檔</h3>
+    <div id="exportInfo" style="font-size:14px;line-height:1.9;color:var(--text)"></div>
+    <div class="progress" id="exportProg" hidden style="margin:14px 0 6px"><i id="exportProgBar"></i></div>
+    <div class="hint" id="exportStatus"></div>
+    <div class="row">
+      <button class="btn btn-primary" id="exportGoBtn">開始匯出</button>
+      <button class="btn btn-ghost" id="exportCancelBtn">取消</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+
+/* ============ 小工具 ============ */
+const CHAP_MARK = "\u0001"; // 章節哨兵：切段時當硬邊界
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => document.querySelectorAll(s);
+function toast(msg, isErr) {
+  const t = $("#toast");
+  t.textContent = msg;
+  t.classList.toggle("err", !!isErr);
+  t.classList.add("show");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.remove("show"), 2600);
+}
+async function sha1(str) {
+  const buf = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+/* ============ 設定持久化 ============ */
+const SKEYS = ["theme","provider","lang","gender","apiKey","gKey","aKey","aRegion","gemKey","model","voice","instructions","segAuto","segLen","skipCode","useCache","browserVoice"];
+function loadSettings() {
+  try {
+    const s = JSON.parse(localStorage.getItem("shuoshu.settings") || "{}");
+    for (const k of SKEYS) {
+      const el = $("#" + k);
+      if (!el || s[k] === undefined) continue;
+      if (el.type === "checkbox") el.checked = s[k];
+      else el.value = s[k];
+    }
+  } catch (e) {}
+}
+function saveSettings() {
+  const s = {};
+  for (const k of SKEYS) {
+    const el = $("#" + k);
+    if (!el) continue;
+    s[k] = el.type === "checkbox" ? el.checked : el.value;
+  }
+  localStorage.setItem("shuoshu.settings", JSON.stringify(s));
+}
+
+/* ============ Markdown → 朗讀文字 ============ */
+function cleanMarkdown(md, skipCode) {
+  let t = md.replace(/\r\n/g, "\n");
+  // 移除 front matter
+  t = t.replace(/^---\n[\s\S]*?\n---\n/, "");
+  // 程式碼區塊
+  if (skipCode) {
+    t = t.replace(/```[\s\S]*?```/g, "\n");
+    t = t.replace(/~~~[\s\S]*?~~~/g, "\n");
+  } else {
+    t = t.replace(/```(\w+)?\n?/g, "\n").replace(/~~~/g, "\n");
+  }
+  // 圖片：保留 alt
+  t = t.replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1");
+  // 連結：保留文字
+  t = t.replace(/\[([^\]]*)\]\([^)]*\)/g, "$1");
+  // 行內程式碼標記
+  t = t.replace(/`([^`]+)`/g, "$1");
+  // 標題標記（保留文字，後面補句號讓它停頓）；h1/h2 前置 CHAP_MARK 當章節哨兵
+  t = t.replace(/^(#{1,6})\s+(.*)$/gm, (m, h, p1) => (h.length <= 2 ? CHAP_MARK : "") + p1.replace(/[。.!?！？]$/, "") + "。");
+  // 粗體 / 斜體 / 刪除線
+  t = t.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1");
+  t = t.replace(/__([^_]+)__/g, "$1").replace(/_([^_]+)_/g, "$1");
+  t = t.replace(/~~([^~]+)~~/g, "$1");
+  // 引用
+  t = t.replace(/^\s*>\s?/gm, "");
+  // 清單符號
+  t = t.replace(/^\s*[-*+]\s+/gm, "");
+  t = t.replace(/^\s*\d+\.\s+/gm, "");
+  // 表格分隔線
+  t = t.replace(/^\s*\|?[\s:|-]+\|?\s*$/gm, "");
+  // 表格：把 | 換成頓號
+  t = t.replace(/^\s*\|(.+)\|\s*$/gm, (m, p1) => p1.split("|").map(s => s.trim()).filter(Boolean).join("、"));
+  // 水平線
+  t = t.replace(/^\s*([-*_])\1{2,}\s*$/gm, "\n");
+  // 殘留 HTML 標籤
+  t = t.replace(/<[^>]+>/g, "");
+  // HTML 實體
+  t = t.replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
+  // 壓縮空白
+  t = t.replace(/[ \t]+/g, " ");
+  t = t.replace(/\n{3,}/g, "\n\n");
+  return t.trim();
+}
+
+// 把長文切成朗讀段：章節哨兵（CHAP_MARK）是硬邊界，章內先依空行分段、
+// 超長段依句子拆，最後貪婪打包成接近 maxLen 的連續大塊。
+// 回傳 { segments, chapters: [{title, index}] }；index = 該章第一段的段號。
+function splitIntoSegments(text, maxLen) {
+  const segments = [];
+  const chapters = [];
+
+  const packBlock = (blockText, title) => {
+    const paras = blockText.split(/\n{2,}/).map(p => p.replace(/\n/g, " ").trim()).filter(Boolean);
+    if (!paras.length) return;
+    if (title) chapters.push({ title, index: segments.length });
+
+    // 第一步：把超長段落拆成不超過 maxLen 的句級 pieces
+    const pieces = [];
+    for (const p of paras) {
+      if (p.length <= maxLen) { pieces.push(p); continue; }
+      const sentences = p.match(/[^。！？!?\.]+[。！？!?\.]+|[^。！？!?\.]+$/g) || [p];
+      let buf = "";
+      for (const s of sentences) {
+        if ((buf + s).length > maxLen && buf) { pieces.push(buf.trim()); buf = ""; }
+        if (s.length > maxLen) {
+          // 單句仍超長，硬切
+          let rest = s;
+          while (rest.length > maxLen) { pieces.push(rest.slice(0, maxLen).trim()); rest = rest.slice(maxLen); }
+          buf += rest;
+        } else {
+          buf += s;
+        }
+      }
+      if (buf.trim()) pieces.push(buf.trim());
+    }
+
+    // 第二步：貪婪打包——短段落（含標題）併進同一塊，換行保留給 TTS 當自然停頓
+    let chunk = "";
+    for (const piece of pieces) {
+      if (chunk && (chunk.length + piece.length + 1) > maxLen) { segments.push(chunk); chunk = piece; }
+      else chunk = chunk ? chunk + "\n" + piece : piece;
+    }
+    if (chunk) segments.push(chunk);
+  };
+
+  const blocks = text.split(CHAP_MARK);
+  packBlock(blocks[0], "");  // 第一個章節哨兵之前的前言
+  for (let b = 1; b < blocks.length; b++) {
+    const title = blocks[b].split("。")[0].replace(/\n[\s\S]*$/, "").trim().slice(0, 60);
+    packBlock(blocks[b], title || ("章節 " + b));
+  }
+  return { segments, chapters };
+}
+
+/* ============ EPUB 解析（瀏覽器原生，零依賴）============ */
+// ZIP central directory 解析；解壓用 DecompressionStream('deflate-raw')
+function zipEntries(buf) {
+  const dv = new DataView(buf);
+  const u8 = new Uint8Array(buf);
+  let eocd = -1;
+  for (let i = buf.byteLength - 22; i >= Math.max(0, buf.byteLength - 22 - 65535); i--) {
+    if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error("不是有效的 EPUB（找不到 ZIP 目錄）");
+  const count = dv.getUint16(eocd + 10, true);
+  let off = dv.getUint32(eocd + 16, true);
+  const entries = new Map();
+  for (let n = 0; n < count; n++) {
+    if (dv.getUint32(off, true) !== 0x02014b50) break;
+    const method = dv.getUint16(off + 10, true);
+    const csize = dv.getUint32(off + 20, true);
+    const nameLen = dv.getUint16(off + 28, true);
+    const extraLen = dv.getUint16(off + 30, true);
+    const cmtLen = dv.getUint16(off + 32, true);
+    const lho = dv.getUint32(off + 42, true);
+    const name = new TextDecoder().decode(u8.subarray(off + 46, off + 46 + nameLen));
+    entries.set(name, { method, csize, lho });
+    off += 46 + nameLen + extraLen + cmtLen;
+  }
+  return entries;
+}
+async function zipExtract(buf, e) {
+  const dv = new DataView(buf);
+  const nameLen = dv.getUint16(e.lho + 26, true);
+  const extraLen = dv.getUint16(e.lho + 28, true);
+  const start = e.lho + 30 + nameLen + extraLen;
+  const data = new Uint8Array(buf, start, e.csize);
+  if (e.method === 0) return data;
+  if (e.method === 8) {
+    const stream = new Blob([data]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  }
+  throw new Error("不支援的 ZIP 壓縮方式: " + e.method);
+}
+
+// ZIP writer(store 模式不壓縮,mp3 已壓縮過;UTF-8 檔名 flag 讓中文章名正確)
+function crc32(u8) {
+  if (!crc32.T) {
+    const t = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = c & 1 ? (c >>> 1) ^ 0xEDB88320 : c >>> 1;
+      t[n] = c;
+    }
+    crc32.T = t;
+  }
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < u8.length; i++) crc = (crc >>> 8) ^ crc32.T[(crc ^ u8[i]) & 0xFF];
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+function zipStore(entries) {
+  const enc = new TextEncoder();
+  const chunks = [];
+  const central = [];
+  let offset = 0;
+  for (const e of entries) {
+    const name = enc.encode(e.name);
+    const crc = crc32(e.data);
+    const lh = new Uint8Array(30 + name.length);
+    const dv = new DataView(lh.buffer);
+    dv.setUint32(0, 0x04034b50, true);   // local file header
+    dv.setUint16(4, 20, true);           // version needed
+    dv.setUint16(6, 0x0800, true);       // general purpose: UTF-8 檔名
+    dv.setUint16(8, 0, true);            // method 0 = store
+    // offsets 10-13: mod time/date 留 0（=1980-01-01），下載用途可接受
+    dv.setUint32(14, crc, true);
+    dv.setUint32(18, e.data.length, true);
+    dv.setUint32(22, e.data.length, true);
+    dv.setUint16(26, name.length, true);
+    lh.set(name, 30);
+    chunks.push(lh, e.data);
+    central.push({ name, crc, size: e.data.length, offset });
+    offset += lh.length + e.data.length;
+  }
+  const cdStart = offset;
+  for (const c of central) {
+    const cd = new Uint8Array(46 + c.name.length);
+    const dv = new DataView(cd.buffer);
+    dv.setUint32(0, 0x02014b50, true);   // central directory header
+    dv.setUint16(4, 20, true);
+    dv.setUint16(6, 20, true);
+    dv.setUint16(8, 0x0800, true);
+    dv.setUint16(10, 0, true);           // compression method: store
+    dv.setUint32(16, c.crc, true);
+    dv.setUint32(20, c.size, true);
+    dv.setUint32(24, c.size, true);
+    dv.setUint16(28, c.name.length, true);
+    dv.setUint32(42, c.offset, true);
+    cd.set(c.name, 46);
+    chunks.push(cd);
+    offset += cd.length;
+  }
+  const eocd = new Uint8Array(22);
+  const dv = new DataView(eocd.buffer);
+  dv.setUint32(0, 0x06054b50, true);
+  dv.setUint16(8, central.length, true);
+  dv.setUint16(10, central.length, true);
+  dv.setUint32(12, offset - cdStart, true);
+  dv.setUint32(16, cdStart, true);
+  chunks.push(eocd);
+  const out = new Uint8Array(offset + 22);
+  let p = 0;
+  for (const ch of chunks) { out.set(ch, p); p += ch.length; }
+  return out;
+}
+
+// XHTML → 朗讀用純文字：只取葉節點區塊，標題補句號，表格／圖／註腳剝掉
+function htmlToPlainText(html) {
+  const d = new DOMParser().parseFromString(html, "text/html");
+  if (!d.body) return "";
+  d.body.querySelectorAll("script,style,nav,aside,figure,table,sup").forEach(n => n.remove());
+  const out = [];
+  const blocks = d.body.querySelectorAll("h1,h2,h3,h4,h5,h6,p,blockquote,li,div,td");
+  for (const el of blocks) {
+    if (el.querySelector("h1,h2,h3,h4,h5,h6,p,blockquote,li,div")) continue;
+    let t = el.textContent.replace(/\s+/g, " ").trim();
+    if (!t) continue;
+    if (/^H[1-6]$/.test(el.tagName)) {
+      t = t.replace(/[。.!?！？]$/, "") + "。";
+      if (/^H[12]$/.test(el.tagName)) t = CHAP_MARK + t; // 章節哨兵
+    }
+    out.push(t);
+  }
+  if (!out.length) {
+    const t = d.body.textContent.replace(/\s+/g, " ").trim();
+    if (t) out.push(t);
+  }
+  return out.join("\n\n");
+}
+
+async function parseEpub(buf) {
+  if (!("DecompressionStream" in window)) throw new Error("此瀏覽器不支援解壓（請更新到較新版本）");
+  const entries = zipEntries(buf);
+  const getText = async (name) => {
+    const e = entries.get(name);
+    return e ? new TextDecoder().decode(await zipExtract(buf, e)) : null;
+  };
+  const container = await getText("META-INF/container.xml");
+  if (!container) throw new Error("EPUB 缺少 container.xml");
+  const opfPath = (container.match(/full-path="([^"]+)"/) || [])[1];
+  const opfXml = opfPath && await getText(opfPath);
+  if (!opfXml) throw new Error("EPUB 缺少 OPF 描述檔");
+  const opfDir = opfPath.includes("/") ? opfPath.slice(0, opfPath.lastIndexOf("/") + 1) : "";
+  const opf = new DOMParser().parseFromString(opfXml, "application/xml");
+
+  let title = "";
+  const tEl = opf.getElementsByTagNameNS("*", "title")[0];
+  if (tEl) title = tEl.textContent.trim();
+
+  const manifest = {};
+  for (const it of opf.querySelectorAll("manifest > item")) {
+    manifest[it.getAttribute("id")] = it.getAttribute("href");
+  }
+  const hrefs = [...opf.querySelectorAll("spine > itemref")]
+    .map(ir => manifest[ir.getAttribute("idref")])
+    .filter(Boolean);
+  if (!hrefs.length) throw new Error("EPUB spine 是空的");
+
+  // 路徑正規化（處理 ../ 與 URL 編碼）
+  const normalize = (p) => {
+    const parts = [];
+    for (const seg of decodeURIComponent(p).split("/")) {
+      if (seg === "..") parts.pop();
+      else if (seg !== "." && seg) parts.push(seg);
+    }
+    return parts.join("/");
+  };
+
+  const parts = [];
+  for (const href of hrefs) {
+    const html = await getText(normalize(opfDir + href.replace(/#.*$/, "")));
+    if (html) {
+      const t = htmlToPlainText(html);
+      if (t) parts.push(t);
+    }
+  }
+  if (!parts.length) throw new Error("EPUB 裡找不到可朗讀的文字");
+  return { title, text: parts.join("\n\n") };
+}
+
+/* ============ 語音快取＋書庫（IndexedDB）============ */
+const DB_NAME = "shuoshu.cache", STORE = "audio", DOCS = "docs", MARKS = "marks";
+let _db = null;
+function openDB() {
+  return new Promise((resolve, reject) => {
+    if (_db) return resolve(_db);
+    const req = indexedDB.open(DB_NAME, 3);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE);
+      if (!db.objectStoreNames.contains(DOCS)) db.createObjectStore(DOCS, { keyPath: "id" });
+      if (!db.objectStoreNames.contains(MARKS)) {
+        const s = db.createObjectStore(MARKS, { keyPath: "id", autoIncrement: true });
+        s.createIndex("byDoc", "docId");
+      }
+    };
+    req.onsuccess = () => { _db = req.result; resolve(_db); };
+    req.onerror = () => reject(req.error);
+  });
+}
+async function cacheGet(key) {
+  try {
+    const db = await openDB();
+    return await new Promise((res, rej) => {
+      const tx = db.transaction(STORE, "readonly").objectStore(STORE).get(key);
+      tx.onsuccess = () => res(tx.result || null);
+      tx.onerror = () => rej(tx.error);
+    });
+  } catch (e) { return null; }
+}
+async function cachePut(key, blob) {
+  try {
+    const db = await openDB();
+    await new Promise((res, rej) => {
+      const tx = db.transaction(STORE, "readwrite").objectStore(STORE).put(blob, key);
+      tx.onsuccess = () => res();
+      tx.onerror = () => rej(tx.error);
+    });
+  } catch (e) {}
+}
+async function cacheClear() {
+  try {
+    const db = await openDB();
+    await new Promise((res) => {
+      const tx = db.transaction(STORE, "readwrite").objectStore(STORE).clear();
+      tx.onsuccess = () => res(); tx.onerror = () => res();
+    });
+  } catch (e) {}
+}
+
+/* ============ 書庫（文件＋續聽進度）============ */
+async function docsPut(doc) {
+  try {
+    const db = await openDB();
+    await new Promise((res, rej) => {
+      const tx = db.transaction(DOCS, "readwrite").objectStore(DOCS).put(doc);
+      tx.onsuccess = () => res(); tx.onerror = () => rej(tx.error);
+    });
+  } catch (e) {}
+}
+async function docsGet(id) {
+  try {
+    const db = await openDB();
+    return await new Promise((res, rej) => {
+      const tx = db.transaction(DOCS, "readonly").objectStore(DOCS).get(id);
+      tx.onsuccess = () => res(tx.result || null);
+      tx.onerror = () => rej(tx.error);
+    });
+  } catch (e) { return null; }
+}
+async function docsAll() {
+  try {
+    const db = await openDB();
+    const all = await new Promise((res, rej) => {
+      const tx = db.transaction(DOCS, "readonly").objectStore(DOCS).getAll();
+      tx.onsuccess = () => res(tx.result || []);
+      tx.onerror = () => rej(tx.error);
+    });
+    return all.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  } catch (e) { return []; }
+}
+async function docsDelete(id) {
+  try {
+    await marksDeleteByDoc(id);
+    const db = await openDB();
+    await new Promise((res) => {
+      const tx = db.transaction(DOCS, "readwrite").objectStore(DOCS).delete(id);
+      tx.onsuccess = () => res(); tx.onerror = () => res();
+    });
+  } catch (e) {}
+}
+function guessTitle(raw) {
+  const h = raw.match(/^#{1,6}\s+(.+)$/m);
+  if (h) return h[1].replace(/[#*`]/g, "").trim().slice(0, 40);
+  const line = raw.split("\n").map(s => s.trim()).find(s => s && !/^---/.test(s));
+  return (line || "未命名文件").slice(0, 40);
+}
+
+/* ============ 重點筆記（IndexedDB marks store）============ */
+async function marksAdd(m) {
+  const db = await openDB();
+  return await new Promise((res, rej) => {
+    const tx = db.transaction(MARKS, "readwrite").objectStore(MARKS).add(m);
+    tx.onsuccess = () => res(tx.result);   // 回傳 autoIncrement id
+    tx.onerror = () => rej(tx.error);
+  });
+}
+async function marksPut(m) {
+  try {
+    const db = await openDB();
+    await new Promise((res, rej) => {
+      const tx = db.transaction(MARKS, "readwrite").objectStore(MARKS).put(m);
+      tx.onsuccess = () => res(); tx.onerror = () => rej(tx.error);
+    });
+  } catch (e) {}
+}
+async function marksByDoc(docId) {
+  try {
+    const db = await openDB();
+    return await new Promise((res, rej) => {
+      const tx = db.transaction(MARKS, "readonly").objectStore(MARKS).index("byDoc").getAll(docId);
+      tx.onsuccess = () => res(tx.result || []);
+      tx.onerror = () => rej(tx.error);
+    });
+  } catch (e) { return []; }
+}
+async function marksDelete(id) {
+  try {
+    const db = await openDB();
+    await new Promise((res) => {
+      const tx = db.transaction(MARKS, "readwrite").objectStore(MARKS).delete(id);
+      tx.onsuccess = () => res(); tx.onerror = () => res();
+    });
+  } catch (e) {}
+}
+async function marksDeleteByDoc(docId) {
+  const all = await marksByDoc(docId);
+  for (const m of all) await marksDelete(m.id);
+}
+
+/* ============ 語系／聲色 ============ */
+const OPENAI_VOICES = [
+  { id: "alloy",   label: "alloy（中性）",       g: "n" },
+  { id: "nova",    label: "nova（明亮女聲）",    g: "f" },
+  { id: "shimmer", label: "shimmer（柔和女聲）", g: "f" },
+  { id: "coral",   label: "coral（活潑女聲）",   g: "f" },
+  { id: "sage",    label: "sage（溫和女聲）",    g: "f" },
+  { id: "echo",    label: "echo（沉穩男聲）",    g: "m" },
+  { id: "onyx",    label: "onyx（低沉男聲）",    g: "m" },
+  { id: "fable",   label: "fable（敘事感）",     g: "n" },
+];
+// Google Cloud TTS：模型內含在音色名（Wavenet／Neural2／Standard）
+const GOOGLE_VOICES = [
+  { id: "cmn-TW-Wavenet-A",  label: "台灣女聲 A（Wavenet）",  g: "f", lang: "zh-TW" },
+  { id: "cmn-TW-Wavenet-B",  label: "台灣男聲 B（Wavenet）",  g: "m", lang: "zh-TW" },
+  { id: "cmn-TW-Wavenet-C",  label: "台灣男聲 C（Wavenet）",  g: "m", lang: "zh-TW" },
+  { id: "cmn-TW-Standard-A", label: "台灣女聲 A（Standard，最省）", g: "f", lang: "zh-TW" },
+  { id: "cmn-CN-Wavenet-A",  label: "普通話女聲 A（Wavenet）", g: "f", lang: "zh" },
+  { id: "cmn-CN-Wavenet-B",  label: "普通話男聲 B（Wavenet）", g: "m", lang: "zh" },
+  { id: "cmn-CN-Wavenet-D",  label: "普通話女聲 D（Wavenet）", g: "f", lang: "zh" },
+  { id: "en-US-Neural2-F",   label: "英文女聲 F（Neural2）",   g: "f", lang: "en" },
+  { id: "en-US-Neural2-D",   label: "英文男聲 D（Neural2）",   g: "m", lang: "en" },
+  { id: "ja-JP-Neural2-B",   label: "日文女聲 B（Neural2）",   g: "f", lang: "ja" },
+  { id: "ja-JP-Neural2-C",   label: "日文男聲 C（Neural2）",   g: "m", lang: "ja" },
+  { id: "ko-KR-Neural2-A",   label: "韓文女聲 A（Neural2）",   g: "f", lang: "ko" },
+  { id: "ko-KR-Neural2-C",   label: "韓文男聲 C（Neural2）",   g: "m", lang: "ko" },
+];
+// Gemini TTS 音色（多語通用，自動跟文本語言）
+const GEMINI_VOICES = [
+  { id: "Kore",   label: "Kore（堅定女聲）",   g: "f" },
+  { id: "Zephyr", label: "Zephyr（明亮女聲）", g: "f" },
+  { id: "Leda",   label: "Leda（年輕女聲）",   g: "f" },
+  { id: "Aoede",  label: "Aoede（輕快女聲）",  g: "f" },
+  { id: "Charon", label: "Charon（沉穩男聲）", g: "m" },
+  { id: "Puck",   label: "Puck（活潑男聲）",   g: "m" },
+  { id: "Orus",   label: "Orus（堅定男聲）",   g: "m" },
+  { id: "Fenrir", label: "Fenrir（激昂男聲）", g: "m" },
+];
+// Azure neural 音色
+const AZURE_VOICES = [
+  { id: "zh-TW-HsiaoChenNeural", label: "曉臻（台灣女聲）",   g: "f", lang: "zh-TW" },
+  { id: "zh-TW-HsiaoYuNeural",   label: "曉雨（台灣女聲）",   g: "f", lang: "zh-TW" },
+  { id: "zh-TW-YunJheNeural",    label: "雲哲（台灣男聲）",   g: "m", lang: "zh-TW" },
+  { id: "zh-CN-XiaoxiaoNeural",  label: "曉曉（普通話女聲）", g: "f", lang: "zh" },
+  { id: "zh-CN-YunxiNeural",     label: "雲希（普通話男聲）", g: "m", lang: "zh" },
+  { id: "zh-CN-YunyangNeural",   label: "雲揚（普通話男聲）", g: "m", lang: "zh" },
+  { id: "en-US-JennyNeural",     label: "Jenny（英文女聲）",  g: "f", lang: "en" },
+  { id: "en-US-GuyNeural",       label: "Guy（英文男聲）",    g: "m", lang: "en" },
+  { id: "ja-JP-NanamiNeural",    label: "Nanami（日文女聲）", g: "f", lang: "ja" },
+  { id: "ja-JP-KeitaNeural",     label: "Keita（日文男聲）",  g: "m", lang: "ja" },
+  { id: "ko-KR-SunHiNeural",     label: "Sun-Hi（韓文女聲）", g: "f", lang: "ko" },
+  { id: "ko-KR-InJoonNeural",    label: "InJoon（韓文男聲）", g: "m", lang: "ko" },
+];
+const LANG_PATTERNS = {
+  "zh-TW": /zh[-_]?(TW|Hant)|cmn[-_]?Hant/i,
+  zh: /^zh|^cmn/i,
+  en: /^en/i,
+  ja: /^ja/i,
+  ko: /^ko/i,
+};
+// OpenAI TTS 沒有語言參數，靠 gpt-4o-mini-tts 的 instructions 控口音
+const LANG_TTS_INSTRUCTIONS = {
+  "zh-TW": "請用台灣口音的中文自然朗讀。",
+  zh: "請用標準中文自然朗讀。",
+  en: "Read aloud in natural English.",
+  ja: "自然な日本語で読み上げてください。",
+  ko: "자연스러운 한국어로 읽어주세요.",
+};
+function effectiveInstructions(cfg) {
+  if (cfg.provider !== "openai" || cfg.model !== "gpt-4o-mini-tts") return "";
+  const parts = [];
+  if (LANG_TTS_INSTRUCTIONS[cfg.lang]) parts.push(LANG_TTS_INSTRUCTIONS[cfg.lang]);
+  if (cfg.instructions) parts.push(cfg.instructions);
+  return parts.join(" ");
+}
+
+// 每家引擎各自記住上次選的音色／模型（切換引擎不互相蓋掉）
+function providerPrefs() {
+  try { return JSON.parse(localStorage.getItem("shuoshu.byProvider") || "{}"); } catch (e) { return {}; }
+}
+function rememberPrefs() {
+  const p = $("#provider").value;
+  if (p === "browser") return;
+  const o = providerPrefs();
+  o[p] = { voice: $("#voice").value, model: $("#model").value };
+  localStorage.setItem("shuoshu.byProvider", JSON.stringify(o));
+}
+
+// 依「引擎＋聲色＋語系」重建音色清單（中性音色只在「不指定」時出現）
+function filterVoices() {
+  const p = $("#provider").value;
+  if (p === "browser") return;
+  const conf = PROVIDERS[p];
+  const g = $("#gender").value;
+  const langSel = $("#lang").value;
+
+  let list = conf.voices.filter(v => g === "any" || v.g === g);
+  if (langSel !== "auto" && conf.voices.some(v => v.lang)) {
+    const byLang = list.filter(v => v.lang === langSel);
+    if (byLang.length) list = byLang;
+  }
+  if (!list.length) list = conf.voices;
+
+  const sel = $("#voice");
+  const saved = (providerPrefs()[p] || {}).voice || sel.value;
+  sel.innerHTML = "";
+  list.forEach(v => {
+    const o = document.createElement("option");
+    o.value = v.id; o.textContent = v.label;
+    sel.appendChild(o);
+  });
+  sel.value = list.some(v => v.id === saved) ? saved : list[0].id;
+}
+
+// 依引擎重建模型清單（沒有 models 的引擎隱藏模型欄）
+function rebuildModels() {
+  const p = $("#provider").value;
+  const conf = PROVIDERS[p];
+  const has = !!(conf && conf.models);
+  $("#modelField").hidden = !has;
+  if (!has) return;
+  const sel = $("#model");
+  const saved = (providerPrefs()[p] || {}).model || sel.value;
+  sel.innerHTML = "";
+  conf.models.forEach(m => {
+    const o = document.createElement("option");
+    o.value = m.id; o.textContent = m.label;
+    sel.appendChild(o);
+  });
+  sel.value = conf.models.some(m => m.id === saved) ? saved : conf.models[0].id;
+}
+
+// 依所選引擎顯示對應欄位
+function updateProviderUI() {
+  const p = $("#provider").value;
+  $("#cloudFields").hidden = p === "browser";
+  $("#browserFields").hidden = p !== "browser";
+  $$("#cloudFields [data-p]").forEach(el => { el.hidden = el.dataset.p !== p; });
+  if (p !== "browser") {
+    rebuildModels();
+    filterVoices();
+    $("#instructionsField").hidden = !(p === "openai" && $("#model").value === "gpt-4o-mini-tts");
+  }
+}
+
+// Web Speech API 不給性別，只能從常見語音名稱猜；猜不到的在「不指定」時照常顯示
+const FEMALE_HINTS = /female|woman|女|hanhan|yating|hsiao|xiao(xiao|yi|chen|yu|mo|han)|mei.?jia|tingting|huihui|yaoyao|samantha|karen|moira|tessa|allison|ava|susan|zira|aria|jenny|kyoko|haruka|nanami|sun.?hi|heami/i;
+const MALE_HINTS = /\bmale\b|男|yun(jhe|xi|yang|jian|ze)|kangkang|danny|daniel|alex|fred|aaron|\bguy\b|david|mark|liang|ichiro|keita|otoya|injoon/i;
+function guessGender(v) {
+  const s = (v.name || "") + " " + (v.voiceURI || "");
+  if (FEMALE_HINTS.test(s)) return "f";
+  if (MALE_HINTS.test(s)) return "m";
+  return "";
+}
+
+/* ============ 重點筆記:句界吸附 ============ */
+// 句界 = 。！？!?；; 與換行（全形半形各一）
+function snapToSentence(text, ratio) {
+  if (!text) return { start: 0, end: 0 };
+  const ends = "。！？!?；;\n";
+  const pos = Math.min(text.length - 1, Math.max(0, Math.floor(text.length * ratio)));
+  let start = 0;
+  for (let i = pos - 1; i >= 0; i--) {
+    if (ends.includes(text[i])) { start = i + 1; break; }
+  }
+  let end = text.length;
+  for (let i = pos; i < text.length; i++) {
+    if (ends.includes(text[i])) { end = i + 1; break; }
+  }
+  while (start < end && /\s/.test(text[start])) start++;
+  return { start, end };
+}
+
+// 重點筆記 → Markdown(dateStr 由呼叫端帶入,函式保持純可測)
+function marksToMarkdown(title, marks, dateStr) {
+  const sorted = marks.slice().sort((a, b) => (a.segIndex - b.segIndex) || (a.start - b.start));
+  const groups = new Map();
+  for (const m of sorted) {
+    const ch = m.chapterTitle || "全文";
+    if (!groups.has(ch)) groups.set(ch, []);
+    groups.get(ch).push(m);
+  }
+  const safeTitle = /[:'"#\[\]&*!|>?,]/.test(title)
+    ? '"' + title.replace(/"/g, '\\"') + '"'
+    : title;
+  const lines = [
+    "---",
+    "title: " + safeTitle,
+    "exported: " + dateStr,
+    "marks: " + sorted.length,
+    "source: Audiobook｜有聲書",
+    "---",
+    "",
+    "# " + title + " — 重點筆記",
+  ];
+  for (const [ch, list] of groups) {
+    lines.push("", "## " + ch);
+    for (const m of list) {
+      lines.push("", "> " + m.text.replace(/\n/g, " "));
+      if (m.note && m.note.trim()) lines.push("", m.note.trim());
+    }
+  }
+  return lines.join("\n") + "\n";
+}
+
+// 檔名清洗(Windows 非法字元)＋匯出前估算
+function sanitizeFilename(name) {
+  const cleaned = (name || "").replace(/[\\/:*?"<>|]/g, "_").replace(/\s+/g, " ").trim().slice(0, 60);
+  return cleaned || "未命名";
+}
+
+// 費率假設(2026-06 查證,USD):按字計費 $/百萬字元;按時計費 $0.015/分鐘音訊。
+// 中文 ~3.3 字/秒;MP3 ~0.5 MB/分、WAV(24kHz 16-bit mono) ~2.9 MB/分。
+function exportEstimate(totalChars, cachedChars, provider, model) {
+  const newChars = Math.max(0, totalChars - cachedChars);
+  const minutes = totalChars / 3.3 / 60;
+  const newMinutes = newChars / 3.3 / 60;
+  const perM = provider === "openai" ? (model === "tts-1-hd" ? 30 : model === "tts-1" ? 15 : null)
+             : provider === "google" ? 4
+             : provider === "azure" ? 15
+             : null;
+  let usd = null; // browser 引擎會留 null（呼叫端先擋掉 browser 才會進來）
+  if (perM !== null) usd = newChars / 1e6 * perM;
+  else if (provider === "openai" || provider === "gemini") usd = newMinutes * 0.015; // mini-tts / gemini 按時
+  const sizeMB = (provider === "gemini" ? 2.9 : 0.5) * minutes;
+  const timeMin = Math.ceil(newChars / 2500 * 3 / 60 / 2); // 段×3 秒 ÷ 併發 2
+  return { newChars, minutes, usd, sizeMB, timeMin };
+}
+
+/* ============ 雲端 TTS 合成（provider 插座）============ */
+// 各家單次請求長度上限不同（Google 5000 bytes、Azure 10 分鐘音訊），
+// 超限時內部依句切塊、逐塊合成後串接 MP3（MPEG frame 自含，直接串接可播）
+function chunkForProvider(text, maxChars) {
+  if (text.length <= maxChars) return [text];
+  const sentences = text.match(/[^。！？!?\.\n]+[。！？!?\.\n]+|[^。！？!?\.\n]+$/g) || [text];
+  const chunks = [];
+  let buf = "";
+  for (const s of sentences) {
+    if (buf && (buf + s).length > maxChars) { chunks.push(buf); buf = ""; }
+    let rest = s;
+    while (rest.length > maxChars) { chunks.push(rest.slice(0, maxChars)); rest = rest.slice(maxChars); }
+    buf += rest;
+  }
+  if (buf) chunks.push(buf);
+  return chunks;
+}
+// gpt-4o-mini-tts 輸入上限是 2000 token（中文一字約 1.4–2 token），1000 字元連最壞情況都壓得住；
+// tts-1 系列上限 4096 字元，留 4000
+function openaiChunkLimit(model) {
+  return model === "gpt-4o-mini-tts" ? 1000 : 4000;
+}
+// 「每段最長字數」自動配：依引擎與模型抓單次請求甜蜜點，切段直接貼齊、避免段內再分塊
+function autoSegLen(provider, model) {
+  if (provider === "openai") return model === "gpt-4o-mini-tts" ? 1000 : 4000;
+  if (provider === "google") return 1300;
+  if (provider === "azure") return 1800;
+  if (provider === "gemini") return 4000;
+  if (provider === "browser") return 800;
+  return 2500;
+}
+function effSegLen() {
+  return $("#segAuto").checked
+    ? autoSegLen($("#provider").value, $("#model").value)
+    : parseInt($("#segLen").value, 10);
+}
+function updateSegLenUI() {
+  const auto = $("#segAuto").checked;
+  $("#segLen").disabled = auto;
+  $("#segLenVal").textContent = auto ? "自動 " + effSegLen() : $("#segLen").value;
+}
+async function synthChunked(text, cfg, maxChars, synthOne) {
+  const chunks = chunkForProvider(text, maxChars);
+  const blobs = [];
+  for (const c of chunks) blobs.push(await synthOne(c, cfg));
+  return blobs.length === 1 ? blobs[0] : new Blob(blobs, { type: "audio/mpeg" });
+}
+
+async function synthOpenAIOne(text, cfg) {
+  const body = { model: cfg.model, input: text, voice: cfg.voice, response_format: "mp3" };
+  const eff = effectiveInstructions(cfg);
+  if (eff) body.instructions = eff;
+  const resp = await fetch("https://api.openai.com/v1/audio/speech", {
+    method: "POST",
+    headers: { "Authorization": "Bearer " + cfg.key, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) {
+    let msg = resp.status + " " + resp.statusText;
+    try { const j = await resp.json(); if (j.error?.message) msg = j.error.message; } catch (e) {}
+    throw new Error("OpenAI: " + msg);
+  }
+  return await resp.blob();
+}
+
+async function synthGoogleOne(text, cfg) {
+  const langCode = cfg.voice.split("-").slice(0, 2).join("-"); // cmn-TW / en-US
+  const body = {
+    input: { text },
+    voice: { languageCode: langCode, name: cfg.voice },
+    audioConfig: { audioEncoding: "MP3" },
+  };
+  const resp = await fetch("https://texttospeech.googleapis.com/v1/text:synthesize?key=" + encodeURIComponent(cfg.key), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) {
+    let msg = resp.status + " " + resp.statusText;
+    try { const j = await resp.json(); if (j.error?.message) msg = j.error.message; } catch (e) {}
+    throw new Error("Google: " + msg);
+  }
+  const j = await resp.json();
+  const bin = atob(j.audioContent);
+  const u8 = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  return new Blob([u8], { type: "audio/mpeg" });
+}
+
+async function synthAzureOne(text, cfg) {
+  const lang = cfg.voice.split("-").slice(0, 2).join("-"); // zh-TW
+  const esc = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const ssml = `<speak version='1.0' xml:lang='${lang}'><voice name='${cfg.voice}'>${esc}</voice></speak>`;
+  const resp = await fetch(`https://${cfg.region}.tts.speech.microsoft.com/cognitiveservices/v1`, {
+    method: "POST",
+    headers: {
+      "Ocp-Apim-Subscription-Key": cfg.key,
+      "Content-Type": "application/ssml+xml",
+      "X-Microsoft-OutputFormat": "audio-24khz-96kbitrate-mono-mp3",
+    },
+    body: ssml,
+  });
+  if (!resp.ok) throw new Error("Azure: " + resp.status + " " + resp.statusText + (resp.status === 401 ? "（key 或 region 不對）" : ""));
+  return await resp.blob();
+}
+
+// Gemini TTS：generateContent 回 base64 PCM（24kHz 16-bit mono），要包 WAV 頭才能播
+function pcmToWav(pcmBytes, sampleRate) {
+  const dataLen = pcmBytes.length;
+  const buf = new ArrayBuffer(44 + dataLen);
+  const dv = new DataView(buf);
+  const wstr = (off, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(off + i, s.charCodeAt(i)); };
+  wstr(0, "RIFF"); dv.setUint32(4, 36 + dataLen, true); wstr(8, "WAVE");
+  wstr(12, "fmt "); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
+  dv.setUint32(24, sampleRate, true); dv.setUint32(28, sampleRate * 2, true);
+  dv.setUint16(32, 2, true); dv.setUint16(34, 16, true);
+  wstr(36, "data"); dv.setUint32(40, dataLen, true);
+  new Uint8Array(buf, 44).set(pcmBytes);
+  return new Blob([buf], { type: "audio/wav" });
+}
+
+// 把多個 WAV(各自帶 44-byte 頭)剝頭合併成單一 PCM;章級組裝用
+// precondition: wavBytesList.length >= 1（呼叫端保證至少一段）
+// 所有 WAV 視為同取樣率，rate 取第一個（Gemini 同模型輸出固定）
+function mergeWavPcm(wavBytesList) {
+  const first = wavBytesList[0];
+  const rate = new DataView(first.buffer, first.byteOffset + 24, 4).getUint32(0, true);
+  let total = 0;
+  for (const w of wavBytesList) total += w.length - 44;
+  const pcm = new Uint8Array(total);
+  let off = 0;
+  for (const w of wavBytesList) { pcm.set(w.subarray(44), off); off += w.length - 44; }
+  return { pcm, rate };
+}
+
+async function synthGeminiOne(text, cfg) {
+  const body = {
+    contents: [{ parts: [{ text }] }],
+    generationConfig: {
+      responseModalities: ["AUDIO"],
+      speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: cfg.voice } } },
+    },
+  };
+  const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${cfg.model}:generateContent?key=${encodeURIComponent(cfg.key)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) {
+    let msg = resp.status + " " + resp.statusText;
+    try { const j = await resp.json(); if (j.error?.message) msg = j.error.message; } catch (e) {}
+    throw new Error("Gemini: " + msg);
+  }
+  const j = await resp.json();
+  const part = j.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+  if (!part) throw new Error("Gemini: 回應裡沒有音訊（可能被安全過濾或模型不支援 TTS）");
+  const rate = parseInt((/rate=(\d+)/.exec(part.inlineData.mimeType || "") || [])[1] || "24000", 10);
+  const bin = atob(part.inlineData.data);
+  const u8 = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  return { pcm: u8, rate };
+}
+
+// WAV 不能像 MP3 直接串接，分塊時合併 PCM 再包一次頭
+async function synthGemini(text, cfg) {
+  const chunks = chunkForProvider(text, 4000);
+  const parts = [];
+  for (const c of chunks) parts.push(await synthGeminiOne(c, cfg));
+  const merged = new Uint8Array(parts.reduce((a, p) => a + p.pcm.length, 0));
+  let off = 0;
+  for (const p of parts) { merged.set(p.pcm, off); off += p.pcm.length; }
+  return pcmToWav(merged, parts[0].rate);
+}
+
+// Provider 註冊表：加新引擎＝加一筆資料＋一個 synthXxxOne()；models 為 null 時不顯示模型欄
+const PROVIDERS = {
+  openai: {
+    label: "OpenAI", voices: OPENAI_VOICES,
+    models: [
+      { id: "gpt-4o-mini-tts", label: "gpt-4o-mini-tts（最新，可給語氣）" },
+      { id: "tts-1-hd", label: "tts-1-hd（高音質）" },
+      { id: "tts-1", label: "tts-1（最快）" },
+    ],
+    synth: (t, c) => synthChunked(t, c, openaiChunkLimit(c.model), synthOpenAIOne),
+  },
+  google: { label: "Google Cloud", voices: GOOGLE_VOICES, models: null, synth: (t, c) => synthChunked(t, c, 1300, synthGoogleOne) },
+  azure:  { label: "Azure",        voices: AZURE_VOICES,  models: null, synth: (t, c) => synthChunked(t, c, 1800, synthAzureOne) },
+  gemini: {
+    label: "Gemini", voices: GEMINI_VOICES,
+    models: [
+      { id: "gemini-2.5-flash-preview-tts", label: "2.5 Flash TTS（穩定）" },
+      { id: "gemini-3.1-flash-tts-preview", label: "3.1 Flash TTS（最新 preview）" },
+    ],
+    synth: synthGemini,
+  },
+};
+
+/* ============ 播放引擎 ============ */
+const State = {
+  segments: [],          // string[]
+  chapters: [],          // [{title, index}]，index = 該章第一段的段號
+  docTitle: "",          // 當前文件標題（書庫／鎖屏顯示用）
+  index: -1,             // 當前段
+  playing: false,
+  mode: "audio",         // 'audio'（雲端）| 'speech'（瀏覽器）
+  audio: null,           // 當前播放的 <audio>（雙緩衝 audioEls 之一）
+  standby: null,         // 待命 <audio>：預載下一段，交界零空隙交換（iOS 背景不掉 session）
+  standbyIndex: -1,      // 待命元素目前載的是哪一段（-1 = 未載）
+  audioEls: [],          // 兩個 <audio> 元素池
+  prefetching: new Set(),// 正在預抓的 index
+  blobUrls: new Map(),   // index -> objectURL（記憶體）
+  doneSet: new Set(),
+  curUtter: null,        // 瀏覽器語音 utterance
+  docId: null,           // 書庫文件 id（sha1(raw)）
+  marks: [],             // 當前文件的重點（marks store 的快取副本）
+  lastBoundary: 0,       // 瀏覽器 TTS 的 onboundary charIndex（標記定位用）
+  rate: 1,               // 播放列快速調速（playbackRate 倍率，不重新合成、不進快取 key）
+  srcIndex: -1,          // audio.src 目前載的是哪一段（續播守門用，防播到舊段）
+};
+
+// 續播守門：audio 裡的音檔必須真的屬於當前段才能直接 resume，否則要重新取段
+function canResumeSrc(src, srcIndex, index) {
+  return !!src && index >= 0 && srcIndex === index;
+}
+
+// 快速調速一格：0.25 一步，0.5–3.0 封頂，修整浮點誤差
+function stepRate(cur, dir) {
+  const base = Number.isFinite(cur) ? cur : 1;
+  const cand = Math.min(3, Math.max(0.5, base + dir * 0.25));
+  return Math.round(cand * 100) / 100;
+}
+
+// 設定抽屜開關（開著時鎖背景捲動，手機觸控才不會穿透到底下的段落清單）
+function openSettings() {
+  $("#settingsBack").hidden = false;
+  document.querySelector("main").style.overflow = "hidden";
+}
+function closeSettings() {
+  $("#settingsBack").hidden = true;
+  document.querySelector("main").style.overflow = "";
+}
+
+// 把 State.rate 套到兩個音檔元素＋更新顯示（瀏覽器 TTS 見 setRate 的重唸處理）
+function applyRate() {
+  State.audioEls.forEach(el => { try { el.playbackRate = State.rate; } catch (e) {} });
+  $("#rateVal").textContent = State.rate.toFixed(2).replace(/0$/, "") + "×";
+}
+
+let rateRestartTimer = null;
+function setRate(r) {
+  State.rate = r;
+  try { localStorage.setItem("shuoshu.rate", String(r)); } catch (e) {}
+  applyRate();
+  // 瀏覽器內建引擎：speechSynthesis 無法改變「正在唸」的語句速度，只能用新速度重唸當前段。
+  // debounce 400ms，連點 ＋／－ 收斂成一次重唸（會跳回該段開頭——Web Speech API 限制，無法 resume）。
+  if (State.playing && cfgNow().provider === "browser") {
+    clearTimeout(rateRestartTimer);
+    rateRestartTimer = setTimeout(() => {
+      if (State.playing && cfgNow().provider === "browser" && State.index >= 0) {
+        speakBrowser(State.segments[State.index]);
+      }
+    }, 400);
+  }
+}
+
+// 把當前聽到第幾段寫回書庫（fire-and-forget）
+async function saveProgress() {
+  if (!State.docId || State.index < 0) return;
+  const doc = await docsGet(State.docId);
+  if (!doc) return;
+  doc.lastIndex = State.index;
+  doc.total = State.segments.length;
+  doc.updatedAt = Date.now();
+  await docsPut(doc);
+}
+
+function cfgNow() {
+  const provider = $("#provider").value;
+  return {
+    provider,
+    lang: $("#lang").value,
+    key: provider === "google" ? $("#gKey").value.trim()
+       : provider === "azure"  ? $("#aKey").value.trim()
+       : provider === "gemini" ? $("#gemKey").value.trim()
+       : $("#apiKey").value.trim(),
+    region: $("#aRegion").value.trim(),
+    model: $("#model").value,
+    voice: $("#voice").value,
+    instructions: $("#instructions").value.trim(),
+    useCache: $("#useCache").checked,
+    browserVoice: $("#browserVoice").value,
+  };
+}
+
+async function segCacheKey(text, cfg) {
+  // model 只對有模型欄的引擎有意義（Google／Azure 的模型內含在音色名）
+  const model = (PROVIDERS[cfg.provider] || {}).models ? cfg.model : "";
+  // 語速一律在播放端調（playbackRate），不影響合成結果；key 的 spd 欄固定 1 維持與舊快取相容
+  return "v2|" + cfg.provider + "|" + model + "|" + cfg.voice + "|1|" + effectiveInstructions(cfg) + "|" + await sha1(text);
+}
+
+// 取得某段語音 blob（IndexedDB 快取 → 雲端請求）；播放與匯出共用
+async function getSegmentBlob(text, cfg) {
+  const key = await segCacheKey(text, cfg);
+  let blob = null;
+  if (cfg.useCache) blob = await cacheGet(key);
+  if (!blob) {
+    blob = await PROVIDERS[cfg.provider].synth(text, cfg);
+    if (cfg.useCache) cachePut(key, blob);
+  }
+  return blob;
+}
+// 取得某段的可播放 URL（含記憶體層與預抓去重）
+async function getSegmentUrl(i) {
+  if (State.blobUrls.has(i)) return State.blobUrls.get(i);
+  const blob = await getSegmentBlob(State.segments[i], cfgNow());
+  const url = URL.createObjectURL(blob);
+  State.blobUrls.set(i, url);
+  return url;
+}
+
+function prefetch(i) {
+  if (i < 0 || i >= State.segments.length) return;
+  if (State.blobUrls.has(i) || State.prefetching.has(i)) return;
+  if (cfgNow().provider === "browser") return;
+  State.prefetching.add(i);
+  getSegmentUrl(i).catch(() => {}).finally(() => State.prefetching.delete(i));
+}
+
+function setStatus(kind, text) {
+  const pill = $("#statusPill");
+  pill.className = "status-pill" + (kind ? " " + kind : "");
+  $("#statusText").textContent = text;
+}
+
+// 目前播到哪一章（回傳 chapters 裡最後一個 index <= State.index 的）
+function currentChapter() {
+  let cur = null;
+  for (const c of State.chapters) {
+    if (c.index <= State.index) cur = c;
+    else break;
+  }
+  return cur;
+}
+
+function renderChapters() {
+  const sel = $("#chapterSel");
+  $("#chapterNav").hidden = State.chapters.length === 0;
+  sel.innerHTML = "";
+  State.chapters.forEach((c, k) => {
+    const o = document.createElement("option");
+    o.value = c.index;
+    o.textContent = `${k + 1}. ${c.title}`;
+    sel.appendChild(o);
+  });
+}
+
+function updateUI() {
+  $("#player").classList.toggle("show", State.segments.length > 0);
+  $$(".seg").forEach((el, i) => {
+    el.classList.toggle("cur", i === State.index);
+    el.classList.toggle("done", State.doneSet.has(i));
+  });
+  const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  const cur = State.index >= 0 ? State.segments[State.index] : "";
+  const ch = currentChapter();
+  $("#nowText").innerHTML = State.segments.length
+    ? `<b>第 ${State.index + 1} / ${State.segments.length} 段</b>${ch ? ` · <b>${esc(ch.title)}</b>` : ""} · ${esc(cur.slice(0, 40))}${cur.length > 40 ? "…" : ""}`
+    : "準備中……";
+  if (ch) $("#chapterSel").value = String(ch.index);
+  // 鎖屏顯示書名＋章節
+  if ("mediaSession" in navigator && State.segments.length) {
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: ch ? ch.title : (State.docTitle || "有聲書"),
+        artist: State.docTitle || "有聲書",
+        album: "Audiobook｜有聲書",
+      });
+    } catch (e) {}
+  }
+  const pct = State.segments.length ? ((State.index + (State.playing ? 0.5 : 0)) / State.segments.length) * 100 : 0;
+  $("#progressBar").style.width = Math.min(100, pct) + "%";
+  $("#playIcon").innerHTML = State.playing
+    ? '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>'   // pause
+    : '<path d="M8 5v14l11-7z"/>';               // play
+  // 捲動當前段進視窗
+  if (State.index >= 0) {
+    const el = $$(".seg")[State.index];
+    if (el) el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+}
+
+/* ============ 雙 <audio> 緩衝：背景鎖屏無縫接續 ============ */
+// iOS 背景音訊很挑：單一元素「pause→換 src→play」的空隙會讓系統收回音訊權限，
+// 下一段的程式化 play() 在背景被擋 → 播到段落交界就停。改用兩個元素交替：
+// 下一段預先載進待命元素，交界時零空隙直接 play()，音訊 session 不中斷。
+function makeAudioEl() {
+  const a = new Audio();
+  a.preload = "auto";
+  try { a.preservesPitch = true; } catch (e) {}
+  a.addEventListener("ended", () => { if (a === State.audio && State.playing) onSegmentEnded(); });
+  a.addEventListener("loadedmetadata", () => { try { a.playbackRate = State.rate; } catch (e) {} });
+  a.addEventListener("play", () => {
+    try { a.playbackRate = State.rate; } catch (e) {}
+    if (a === State.audio) mediaPlaying(true);
+  });
+  a.addEventListener("timeupdate", () => {
+    if (a !== State.audio || !a.duration) return;
+    const pct = ((State.index + a.currentTime / a.duration) / State.segments.length) * 100;
+    $("#progressBar").style.width = Math.min(100, pct) + "%";
+    updatePositionState(a);
+  });
+  return a;
+}
+function pauseStandby() { try { State.standby.pause(); } catch (e) {} }
+function pauseAllAudio() { State.audioEls.forEach(el => { try { el.pause(); } catch (e) {} }); }
+// 交換當前／待命元素（待命已預載好下一段）
+function swapToStandby() {
+  const old = State.audio;
+  State.audio = State.standby;
+  State.standby = old;
+  State.standbyIndex = -1;
+  try { old.pause(); } catch (e) {}
+}
+// 把第 i 段載入指定 audio 元素（src 走記憶體層／快取／雲端合成）
+async function loadAudioEl(el, i) {
+  const url = await getSegmentUrl(i);
+  el.src = url;
+  try { el.playbackRate = State.rate; } catch (e) {}
+  try { el.load(); } catch (e) {}
+  return url;
+}
+// 預載下一段進待命元素（雲端才需要；瀏覽器引擎無 <audio>）
+async function preloadStandby(i) {
+  if (cfgNow().provider === "browser") { State.standbyIndex = -1; return; }
+  if (i < 0 || i >= State.segments.length) { State.standbyIndex = -1; return; }
+  if (State.standbyIndex === i && State.standby.src) return;
+  try { await loadAudioEl(State.standby, i); State.standbyIndex = i; }
+  catch (e) { State.standbyIndex = -1; }
+}
+// 維護鎖屏播放狀態與進度（iOS 控制中心／鎖屏顯示用）
+function mediaPlaying(on) {
+  if ("mediaSession" in navigator) {
+    try { navigator.mediaSession.playbackState = on ? "playing" : "paused"; } catch (e) {}
+  }
+}
+function updatePositionState(el) {
+  if (!("mediaSession" in navigator) || !navigator.mediaSession.setPositionState) return;
+  if (!el.duration || !isFinite(el.duration)) return;
+  try {
+    navigator.mediaSession.setPositionState({
+      duration: el.duration,
+      playbackRate: el.playbackRate || 1,
+      position: Math.min(el.currentTime, el.duration),
+    });
+  } catch (e) {}
+}
+// 手機＋瀏覽器引擎：鎖屏／切背景會被系統暫停，提示一次改用雲端引擎
+function maybeWarnSpeechBackground() {
+  if (cfgNow().provider !== "browser") return;
+  if (!/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) return;
+  try {
+    if (localStorage.getItem("shuoshu.speechBgWarned")) return;
+    localStorage.setItem("shuoshu.speechBgWarned", "1");
+  } catch (e) {}
+  toast("提醒:瀏覽器內建語音在手機鎖屏／切背景會被系統暫停,需要背景播放請改用雲端引擎", false);
+}
+
+async function playIndex(i, fromAuto) {
+  if (i < 0 || i >= State.segments.length) { stopAll(); return; }
+  State.index = i;
+  State.playing = true;
+  const cfg = cfgNow();
+  updateUI();
+  saveProgress();
+
+  if (cfg.provider === "browser") {
+    pauseAllAudio();
+    setStatus("playing", "朗讀中");
+    speakBrowser(State.segments[i]);
+    mediaPlaying(true);
+    maybeWarnSpeechBackground();
+    return;
+  }
+
+  // 雲端模式
+  if (!cfg.key) { stopAll(); toast(`請先在「語音設定」填入 ${PROVIDERS[cfg.provider].label} 的 API Key`, true); openSettings(); return; }
+  if (cfg.provider === "azure" && !cfg.region) { stopAll(); toast("請填 Azure region（例如 eastasia）", true); openSettings(); return; }
+
+  // 自動接續且待命元素已預載這一段 → 零空隙交換（背景鎖屏不掉 session 的關鍵路徑）
+  if (fromAuto && State.standbyIndex === i && State.standby.src) {
+    swapToStandby();
+    State.srcIndex = i;
+    try { State.audio.playbackRate = State.rate; } catch (e) {}
+    try {
+      await State.audio.play();
+      setStatus("playing", "播放中");
+      mediaPlaying(true);
+      preloadStandby(i + 1); // 再預載下一段
+      prefetch(i + 2);
+      return;
+    } catch (e) { /* 待命元素播放失敗 → 落到下方一般路徑重載（State.audio 已是交換後的元素）*/ }
+  }
+
+  // 一般路徑：首播／使用者跳段／預載未命中
+  try { State.audio.pause(); } catch (e) {}
+  pauseStandby();
+  if ("speechSynthesis" in window) speechSynthesis.cancel();
+  setStatus("loading", "合成中");
+  try {
+    await loadAudioEl(State.audio, i);
+    if (State.index !== i || !State.playing) return; // 期間被切換
+    State.srcIndex = i;
+    // 語速一律在播放端調（playbackRate，瀏覽器預設保持音高），換速不重新合成、不另收費
+    await State.audio.play();
+    setStatus("playing", "播放中");
+    mediaPlaying(true);
+    preloadStandby(i + 1); // 預載下一段（背景無縫接續用）
+    prefetch(i + 2);
+  } catch (e) {
+    State.playing = false;
+    setStatus("", "錯誤");
+    updateUI();
+    toast(e.message || "合成失敗", true);
+  }
+}
+
+function speakBrowser(text) {
+  const u = new SpeechSynthesisUtterance(text);
+  const cfg = cfgNow();
+  u.rate = Math.min(10, Math.max(0.1, State.rate)); // 播放列調速，下一段（utterance）生效
+  const voices = speechSynthesis.getVoices();
+  const langPat = LANG_PATTERNS[cfg.lang];
+  const v = voices.find(v => v.name === cfg.browserVoice)
+    || (langPat && voices.find(v => langPat.test(v.lang) || langPat.test(v.name)))
+    || voices.find(v => /zh|cmn|Chinese|中文/i.test(v.lang + v.name));
+  if (v) { u.voice = v; u.lang = v.lang; }
+  State.lastBoundary = 0;
+  u.onboundary = (e) => { State.lastBoundary = e.charIndex || 0; };
+  u.onend = () => { if (State.playing) onSegmentEnded(); };
+  u.onerror = () => { if (State.playing) onSegmentEnded(); };
+  State.curUtter = u;
+  speechSynthesis.cancel();
+  speechSynthesis.speak(u);
+}
+
+function onSegmentEnded() {
+  State.doneSet.add(State.index);
+  if (State.index + 1 < State.segments.length) {
+    playIndex(State.index + 1, true); // fromAuto：走待命元素零空隙交換
+  } else {
+    stopAll();
+    toast("全部朗讀完畢");
+  }
+}
+
+function stopAudioOnly() {
+  pauseAllAudio();
+  if ("speechSynthesis" in window) speechSynthesis.cancel(); // headless／舊環境無此 API
+}
+function stopAll() {
+  State.playing = false;
+  stopAudioOnly();
+  mediaPlaying(false);
+  setStatus("", "待機");
+  updateUI();
+}
+
+function togglePlay() {
+  if (!State.segments.length) return;
+  const cfg = cfgNow();
+  if (State.playing) {
+    // 暫停
+    State.playing = false;
+    if (cfg.provider === "browser") speechSynthesis.pause();
+    else State.audio.pause();
+    mediaPlaying(false);
+    setStatus("", "暫停");
+    updateUI();
+  } else {
+    // 繼續 / 從頭
+    if (State.index < 0) { playIndex(0); return; }
+    State.playing = true;
+    if (cfg.provider === "browser") {
+      if (speechSynthesis.paused) speechSynthesis.resume();
+      else speakBrowser(State.segments[State.index]);
+      mediaPlaying(true);
+      setStatus("playing", "朗讀中");
+    } else {
+      if (canResumeSrc(State.audio.src, State.srcIndex, State.index)) { State.audio.play(); mediaPlaying(true); setStatus("playing", "播放中"); }
+      else playIndex(State.index); // src 是舊段（合成中被暫停／換書／合成失敗）→ 重新取對的段
+    }
+    updateUI();
+  }
+}
+
+// 建立雙緩衝元素池：事件監聽在 makeAudioEl 內逐元素掛，用 a === State.audio 守門，
+// 待命元素的 loadedmetadata/timeupdate 不會干擾 UI。playbackRate 也在 play／loadedmetadata 重套，
+// 修 iOS Safari 每載入新音檔把 playbackRate 打回 1 的老問題。
+State.audioEls = [makeAudioEl(), makeAudioEl()];
+State.audio = State.audioEls[0];
+State.standby = State.audioEls[1];
+
+/* ============ 段落渲染 ============ */
+// 段內文字依 marks 切片渲染:被任一重點覆蓋的區間用 <mark class=hl> 包起來
+function renderSegText(el, i) {
+  const s = State.segments[i];
+  const ms = State.marks.filter(m => m.segIndex === i);
+  el.innerHTML = "";
+  if (!ms.length) { el.textContent = s; return; }
+  const bounds = new Set([0, s.length]);
+  for (const m of ms) {
+    bounds.add(Math.max(0, Math.min(s.length, m.start)));
+    bounds.add(Math.max(0, Math.min(s.length, m.end)));
+  }
+  const pts = [...bounds].sort((a, b) => a - b);
+  for (let k = 0; k + 1 < pts.length; k++) {
+    const a = pts[k], b = pts[k + 1];
+    const covering = ms.filter(m => m.start <= a && m.end >= b);
+    const node = document.createElement(covering.length ? "mark" : "span");
+    node.textContent = s.slice(a, b);
+    if (covering.length) {
+      node.className = "hl" + (covering.some(m => m.note) ? " hasnote" : "");
+      node.dataset.id = covering[0].id;
+    }
+    el.appendChild(node);
+  }
+}
+function rerenderSeg(i) {
+  const el = $$(".seg")[i];
+  if (el) renderSegText(el.querySelector(".txt"), i);
+}
+
+function renderSegments() {
+  const list = $("#segList");
+  list.innerHTML = "";
+  State.segments.forEach((s, i) => {
+    const div = document.createElement("div");
+    div.className = "seg";
+    div.dataset.i = i;
+    div.innerHTML = `<span class="num">${i + 1}</span><span class="txt"></span>`;
+    renderSegText(div.querySelector(".txt"), i);
+    div.addEventListener("click", (e) => {
+      const hl = e.target.closest("mark.hl");
+      if (hl) {
+        const m = State.marks.find(x => x.id === Number(hl.dataset.id));
+        if (m) openMarkModal(m);
+        return;
+      }
+      if (!window.getSelection().isCollapsed) return; // 選取中不觸發跳播
+      playIndex(i);
+    });
+    list.appendChild(div);
+  });
+  const chars = State.segments.reduce((a, s) => a + s.length, 0);
+  $("#segCount").textContent = State.segments.length + " 段";
+  $("#segChars").textContent = chars.toLocaleString() + " 字";
+  $("#segMeta").hidden = State.segments.length === 0;
+  $("#emptyState").hidden = State.segments.length > 0;
+  // 教學提示：載入後顯示，標出第一個重點就收掉
+  $("#markHint").hidden = !State.segments.length || State.marks.length > 0;
+}
+
+/* ============ 重點面板＋MD 匯出 ============ */
+function downloadBlob(blob, filename) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+}
+
+function renderMarksPanel() {
+  const list = $("#marksList");
+  list.innerHTML = "";
+  const sorted = State.marks.slice().sort((a, b) => (a.segIndex - b.segIndex) || (a.start - b.start));
+  $("#marksEmpty").hidden = sorted.length > 0;
+  $("#marksDlBtn").disabled = !sorted.length;
+  $("#marksCopyBtn").disabled = !sorted.length;
+  let lastCh = null;
+  for (const m of sorted) {
+    const ch = m.chapterTitle || "全文";
+    if (ch !== lastCh) {
+      const h = document.createElement("div");
+      h.className = "lib-sub";
+      h.style.cssText = "margin:14px 4px 6px;font-weight:600";
+      h.textContent = ch;
+      list.appendChild(h);
+      lastCh = ch;
+    }
+    const item = document.createElement("div");
+    item.className = "seg";
+    const t = document.createElement("div");
+    t.style.cssText = "flex:1;min-width:0";
+    const q = document.createElement("div");
+    q.style.fontSize = "14px";
+    q.textContent = m.text.length > 80 ? m.text.slice(0, 80) + "…" : m.text;
+    t.appendChild(q);
+    if (m.note) {
+      const n = document.createElement("div");
+      n.className = "lib-sub";
+      n.textContent = "筆記：" + m.note;
+      t.appendChild(n);
+    }
+    item.appendChild(t);
+    item.addEventListener("click", () => { openMarkModal(m); });
+    list.appendChild(item);
+  }
+}
+
+function currentMarksMd() {
+  return marksToMarkdown(State.docTitle || "未命名文件", State.marks, new Date().toISOString().slice(0, 10));
+}
+$("#marksDlBtn").addEventListener("click", () => {
+  downloadBlob(new Blob([currentMarksMd()], { type: "text/markdown" }),
+    sanitizeFilename(State.docTitle || "未命名文件") + "-重點筆記.md");
+});
+$("#marksCopyBtn").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(currentMarksMd());
+    toast("已複製 " + State.marks.length + " 則重點，可直接貼進筆記軟體");
+  } catch (e) { toast("複製失敗，請改用下載", true); }
+});
+
+/* ============ 整本匯出音檔 ============ */
+const Exporter = { running: false, cancel: false };
+
+// 章節 → 段範圍；前言（第一章之前的段）獨立成檔；無章節＝整本一檔
+function chapterRanges() {
+  const n = State.segments.length;
+  if (!State.chapters.length) return [{ title: State.docTitle || "全書", from: 0, to: n }];
+  const ranges = [];
+  if (State.chapters[0].index > 0) ranges.push({ title: "前言", from: 0, to: State.chapters[0].index });
+  State.chapters.forEach((c, k) => {
+    ranges.push({ title: c.title, from: c.index, to: k + 1 < State.chapters.length ? State.chapters[k + 1].index : n });
+  });
+  return ranges.filter(r => r.to > r.from);
+}
+
+async function countCachedChars(cfg) {
+  let cached = 0;
+  for (const s of State.segments) {
+    if (await cacheGet(await segCacheKey(s, cfg))) cached += s.length;
+  }
+  return cached;
+}
+
+async function openExportModal() {
+  if (!State.segments.length) { toast("先載入文件", true); return; }
+  const cfg = cfgNow();
+  if (cfg.provider === "browser") {
+    toast("瀏覽器內建引擎不提供音訊資料，匯出請改用雲端引擎", true); return;
+  }
+  if (!cfg.key) {
+    toast(`請先在「語音設定」填 ${PROVIDERS[cfg.provider].label} 的 API Key`, true);
+    openSettings(); return;
+  }
+  if (cfg.provider === "azure" && !cfg.region) { toast("請填 Azure region", true); return; }
+  $("#exportModalBack").hidden = false;
+  $("#exportGoBtn").hidden = false;
+  $("#exportGoBtn").disabled = true;
+  $("#exportProg").hidden = true;
+  $("#exportProgBar").style.width = "0";
+  $("#exportStatus").textContent = "";
+  $("#exportInfo").textContent = "計算費用與檔案大小中……";
+  const total = State.segments.reduce((a, s) => a + s.length, 0);
+  const cached = await countCachedChars(cfg);
+  const est = exportEstimate(total, cached, cfg.provider, cfg.model);
+  const usdTxt = est.usd === null ? "依方案而定"
+    : est.usd === 0 ? "$0（全部已有快取）"
+    : "≈ US$" + est.usd.toFixed(2) + "（約 NT$" + Math.round(est.usd * 31.5) + "）";
+  const fmt = cfg.provider === "gemini" ? "WAV（無壓縮，檔較大）" : "MP3";
+  $("#exportInfo").innerHTML =
+    `全書 ${total.toLocaleString()} 字，其中 <b>${cached.toLocaleString()} 字已有快取（$0）</b><br>` +
+    `預估新合成費用：<b>${usdTxt}</b>` +
+    (cfg.provider === "google" ? "<br>（Google 每月有免費額度，額度內實付 $0）" : "") + "<br>" +
+    `預估音訊：約 ${Math.max(1, Math.round(est.minutes))} 分鐘 / ${Math.max(1, Math.round(est.sizeMB))} MB（${fmt}，按章節分檔打包 zip）<br>` +
+    `預估合成時間：約 ${Math.max(1, est.timeMin)} 分鐘<br>` +
+    `<span style="color:var(--warn)">檔案較大，建議在電腦端執行；手機請全程保持螢幕開啟。</span>`;
+  $("#exportGoBtn").disabled = false;
+}
+
+$("#exportBtn").addEventListener("click", openExportModal);
+$("#exportCancelBtn").addEventListener("click", () => {
+  if (Exporter.running) { Exporter.cancel = true; $("#exportStatus").textContent = "取消中……"; }
+  else $("#exportModalBack").hidden = true;
+});
+
+async function synthBlobRetry(text, cfg) {
+  let err = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (Exporter.cancel) throw new Error("已取消");
+    try { return await getSegmentBlob(text, cfg); } catch (e) { err = e; }
+  }
+  throw err;
+}
+
+async function runExport() {
+  if (Exporter.running) return;
+  const cfg = cfgNow();
+  const ranges = chapterRanges();
+  const segs = State.segments.slice(); // 快照：匯出期間切換文件不污染在途佇列
+  const totalSegs = segs.length;
+  Exporter.running = true;
+  Exporter.cancel = false;
+  $("#exportGoBtn").hidden = true;
+  $("#exportProg").hidden = false;
+  let done = 0;
+  try {
+    const files = [];
+    for (const r of ranges) {
+      const blobs = new Array(r.to - r.from);
+      let next = r.from;
+      const worker = async () => {
+        while (next < r.to) {
+          if (Exporter.cancel) throw new Error("已取消");
+          const i = next++;
+          blobs[i - r.from] = await synthBlobRetry(segs[i], cfg);
+          done++;
+          $("#exportStatus").textContent = `第 ${done} / ${totalSegs} 段 · ${r.title}`;
+          $("#exportProgBar").style.width = (done / totalSegs * 100) + "%";
+        }
+      };
+      await Promise.all([worker(), worker()]); // 併發 2
+      let data, ext;
+      if (cfg.provider === "gemini") {
+        const wavs = [];
+        for (const b of blobs) wavs.push(new Uint8Array(await b.arrayBuffer()));
+        const m = mergeWavPcm(wavs);
+        data = new Uint8Array(await pcmToWav(m.pcm, m.rate).arrayBuffer());
+        ext = ".wav";
+      } else {
+        data = new Uint8Array(await new Blob(blobs, { type: "audio/mpeg" }).arrayBuffer());
+        ext = ".mp3";
+      }
+      files.push({ name: sanitizeFilename(r.title) + ext, data });
+    }
+    const book = sanitizeFilename(State.docTitle || "有聲書");
+    if (files.length === 1) {
+      // 無章節書退化單檔直接下載，不打包
+      const ext = files[0].name.slice(files[0].name.lastIndexOf("."));
+      const type = ext === ".wav" ? "audio/wav" : "audio/mpeg";
+      downloadBlob(new Blob([files[0].data], { type }), book + ext);
+    } else {
+      files.forEach((f, k) => { f.name = String(k + 1).padStart(2, "0") + "-" + f.name; });
+      downloadBlob(new Blob([zipStore(files)], { type: "application/zip" }), book + ".zip");
+    }
+    $("#exportStatus").textContent = "完成，已開始下載。";
+    toast("匯出完成");
+  } catch (e) {
+    if (e.message === "已取消") {
+      $("#exportStatus").textContent = "已取消。已合成的段落留在快取，下次匯出從那裡續跑、不重複收費。";
+    } else {
+      $("#exportStatus").textContent = "失敗：" + (e.message || e) + "（已完成部分留在快取，重試不重複收費）";
+      toast("匯出失敗：" + (e.message || e), true);
+    }
+  } finally {
+    Exporter.running = false;
+    Exporter.cancel = false;
+    $("#exportGoBtn").hidden = false;
+  }
+}
+$("#exportGoBtn").addEventListener("click", runExport);
+
+/* ============ 重點筆記:建立與編輯 ============ */
+function chapterTitleForSeg(i) {
+  let t = "";
+  for (const c of State.chapters) { if (c.index <= i) t = c.title; else break; }
+  return t;
+}
+
+async function addMark(segIndex, start, end, fromTap) {
+  if (!State.docId) { toast("先載入文件才能畫重點", true); return; }
+  const text = State.segments[segIndex].slice(start, end).trim();
+  if (!text) return;
+  if (State.marks.some(m => m.segIndex === segIndex && m.start === start && m.end === end)) {
+    toast("這裡已經標過了"); return;
+  }
+  const m = {
+    docId: State.docId, segIndex, start, end, text,
+    note: "", chapterTitle: chapterTitleForSeg(segIndex), createdAt: Date.now(),
+  };
+  try { m.id = await marksAdd(m); } catch (e) { toast("儲存重點失敗", true); return; }
+  State.marks.push(m);
+  rerenderSeg(segIndex);
+  renderMarksPanel();
+  $("#markHint").hidden = true; // 學會了，收掉教學提示
+  toast((fromTap ? "已標記：" : "已標重點：") + text.slice(0, 18) + (text.length > 18 ? "…" : ""));
+}
+
+let editingMark = null;
+function openMarkModal(m) {
+  editingMark = m;
+  $("#markQuote").textContent = m.text;
+  $("#markNote").value = m.note || "";
+  $("#markModalBack").hidden = false;
+}
+$("#markSaveBtn").addEventListener("click", async () => {
+  if (!editingMark) return;
+  editingMark.note = $("#markNote").value.trim();
+  await marksPut(editingMark);
+  rerenderSeg(editingMark.segIndex);
+  renderMarksPanel();
+  $("#markModalBack").hidden = true;
+  toast("已儲存");
+});
+$("#markDelBtn").addEventListener("click", async () => {
+  if (!editingMark) return;
+  await marksDelete(editingMark.id);
+  State.marks = State.marks.filter(x => x.id !== editingMark.id);
+  rerenderSeg(editingMark.segIndex);
+  renderMarksPanel();
+  $("#markModalBack").hidden = true;
+  toast("已刪除重點");
+});
+$("#markCloseBtn").addEventListener("click", () => { $("#markModalBack").hidden = true; });
+$("#markModalBack").addEventListener("click", (e) => { if (e.target.id === "markModalBack") $("#markModalBack").hidden = true; });
+
+/* 選取偵測 → 浮動「標重點」鈕 */
+function selectionInSeg() {
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed || !sel.rangeCount) return null;
+  const range = sel.getRangeAt(0);
+  const owner = (n) => (n.nodeType === 3 ? n.parentElement : n)?.closest(".seg .txt") || null;
+  const txtEl = owner(range.startContainer);
+  if (!txtEl || txtEl !== owner(range.endContainer)) return null; // 限單段內
+  const i = parseInt(txtEl.closest(".seg").dataset.i, 10);
+  const offsetOf = (node, off) => {
+    let total = 0;
+    const walker = document.createTreeWalker(txtEl, NodeFilter.SHOW_TEXT);
+    let n;
+    while ((n = walker.nextNode())) {
+      if (n === node) return total + off;
+      total += n.textContent.length;
+    }
+    return total;
+  };
+  const start = offsetOf(range.startContainer, range.startOffset);
+  const end = offsetOf(range.endContainer, range.endOffset);
+  return end > start ? { i, start, end } : null;
+}
+
+let selTimer = null;
+document.addEventListener("selectionchange", () => {
+  clearTimeout(selTimer);
+  selTimer = setTimeout(() => {
+    const hit = selectionInSeg();
+    const btn = $("#selMarkBtn");
+    if (!hit) { btn.hidden = true; return; }
+    const rect = window.getSelection().getRangeAt(0).getBoundingClientRect();
+    btn.style.left = Math.max(8, Math.min(window.innerWidth - 96, rect.left + rect.width / 2 - 44)) + "px";
+    btn.style.top = Math.max(8, rect.top - 48) + "px";
+    btn._hit = hit;
+    btn.hidden = false;
+  }, 200);
+});
+$("#selMarkBtn").addEventListener("click", () => {
+  const h = $("#selMarkBtn")._hit;
+  $("#selMarkBtn").hidden = true;
+  if (h) addMark(h.i, h.start, h.end, false);
+  const sel = window.getSelection();
+  if (sel) sel.removeAllRanges();
+});
+/* 一鍵標記:雲端用播放時間比例推估、瀏覽器引擎用 onboundary 精準定位 */
+function markCurrent() {
+  if (State.index < 0 || !State.segments.length) { toast("還沒開始播放", true); return; }
+  const text = State.segments[State.index];
+  let ratio = 0;
+  if (cfgNow().provider === "browser") {
+    ratio = text.length ? State.lastBoundary / text.length : 0;
+  } else if (State.audio.duration) {
+    ratio = State.audio.currentTime / State.audio.duration;
+  }
+  const { start, end } = snapToSentence(text, ratio);
+  addMark(State.index, start, end, true);
+}
+$("#markBtn").addEventListener("click", markCurrent);
+
+async function loadText(raw, title, plain, fixedSegLen) {
+  if (!raw || !raw.trim()) { toast("沒有內容可載入", true); return; }
+  if (Exporter.running) { toast("匯出進行中，請先取消或等它完成再載入新文件", true); return; }
+  stopAll();
+  // 釋放舊的 blob url
+  State.blobUrls.forEach(u => URL.revokeObjectURL(u));
+  State.blobUrls.clear();
+  // 清掉兩個元素裡殘留的舊書音檔（revoke 不會卸載已載入的媒體，留著會被續播分支播出來）
+  State.srcIndex = -1;
+  State.standbyIndex = -1;
+  State.audioEls.forEach(el => { el.removeAttribute("src"); try { el.load(); } catch (e) {} });
+  State.doneSet.clear();
+  State.prefetching.clear();
+  State.index = -1;
+  State.docId = null;
+  State.marks = [];
+
+  // EPUB 已抽成純文字，不再過 markdown 清理
+  const clean = plain ? raw.replace(/\n{3,}/g, "\n\n").trim() : cleanMarkdown(raw, $("#skipCode").checked);
+  const maxLen = fixedSegLen || effSegLen(); // 書庫沿用當時切段長度，續聽段數才對得上
+  const split = splitIntoSegments(clean, maxLen);
+  State.segments = split.segments;
+  State.chapters = split.chapters;
+  renderSegments();
+  renderChapters();
+
+  // 登錄書庫＋撈續聽進度
+  let resumeAt = -1;
+  try {
+    const id = await sha1(raw);
+    State.docId = id;
+    const old = await docsGet(id);
+    const doc = old || { id, raw, title: title || guessTitle(raw), createdAt: Date.now(), lastIndex: -1 };
+    if (title) doc.title = title;
+    State.docTitle = doc.title;
+    doc.plain = !!plain;
+    doc.segLen = maxLen;
+    doc.total = State.segments.length;
+    doc.updatedAt = Date.now();
+    await docsPut(doc);
+    if (old && old.lastIndex > 0 && old.lastIndex < State.segments.length) resumeAt = old.lastIndex;
+    State.marks = await marksByDoc(id);
+    renderSegments();          // marks 到位後重渲染高亮
+    renderLibrary();
+  } catch (e) {}
+
+  if (resumeAt > 0) {
+    State.index = resumeAt;
+    for (let k = 0; k < resumeAt; k++) State.doneSet.add(k);
+  }
+  updateUI();
+  if (State.segments.length) {
+    toast(resumeAt > 0
+      ? `上次聽到第 ${resumeAt + 1} 段，按播放從那裡繼續`
+      : `已切成 ${State.segments.length} 段，按播放開始`);
+    const c0 = cfgNow();
+    if (c0.provider !== "browser" && c0.key) prefetch(resumeAt > 0 ? resumeAt : 0);
+  }
+}
+
+/* ============ 書庫渲染 ============ */
+async function renderLibrary() {
+  const docs = await docsAll();
+  const list = $("#libList");
+  list.innerHTML = "";
+  $("#libEmpty").hidden = docs.length > 0;
+  docs.forEach(d => {
+    const div = document.createElement("div");
+    div.className = "lib-item";
+    const heard = Math.min((d.lastIndex ?? -1) + 1, d.total || 0);
+    const pct = d.total ? Math.round(heard / d.total * 100) : 0;
+    const prog = d.total ? (heard >= d.total ? "已聽完" : `聽到 ${heard} / ${d.total} 段（${pct}%）`) : "";
+    const date = d.updatedAt ? new Date(d.updatedAt).toLocaleDateString("zh-TW") : "";
+    div.innerHTML = `
+      <div class="lib-main">
+        <div class="lib-title"></div>
+        <div class="lib-sub">${prog}${prog && date ? " · " : ""}${date}</div>
+      </div>
+      <button class="icon-btn lib-exp" title="匯出音檔">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M5 21h14"/></svg>
+      </button>
+      <button class="icon-btn lib-del" title="刪除紀錄">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-9 0 1 13h8l1-13"/></svg>
+      </button>`;
+    div.querySelector(".lib-title").textContent = d.title || "未命名文件";
+    div.querySelector(".lib-main").addEventListener("click", () => openDoc(d));
+    div.querySelector(".lib-exp").addEventListener("click", async (e) => {
+      e.stopPropagation();
+      await openDoc(d);
+      openExportModal();
+    });
+    div.querySelector(".lib-del").addEventListener("click", async (e) => {
+      e.stopPropagation();
+      if (!confirm(`刪除「${d.title}」的書庫紀錄？（語音快取不受影響）`)) return;
+      await docsDelete(d.id);
+      if (State.docId === d.id) State.docId = null;
+      renderLibrary();
+    });
+    list.appendChild(div);
+  });
+}
+async function openDoc(d) {
+  lastRaw = d.raw;
+  lastPlain = !!d.plain;
+  await loadText(d.raw, d.title, d.plain, d.segLen); // 沿用當時切段長度，續聽段數才對得上
+}
+
+/* ============ UI 綁定 ============ */
+let lastRaw = "";
+let lastPlain = false;
+
+// 統一選檔／拖曳入口：EPUB 走解析、md／txt 走原路
+function handleFile(f) {
+  const isEpub = /\.epub$/i.test(f.name) || f.type === "application/epub+zip";
+  const r = new FileReader();
+  if (isEpub) {
+    r.onload = async () => {
+      try {
+        toast("解析 EPUB 中……");
+        const { title, text } = await parseEpub(r.result);
+        lastRaw = text; lastPlain = true;
+        $("#dropzone").querySelector("strong").textContent = f.name;
+        await loadText(text, title || f.name.replace(/\.epub$/i, ""), true);
+      } catch (e) {
+        toast("EPUB 解析失敗：" + (e.message || e), true);
+      }
+    };
+    r.readAsArrayBuffer(f);
+  } else {
+    r.onload = () => {
+      lastRaw = r.result; lastPlain = false;
+      $("#dropzone").querySelector("strong").textContent = f.name;
+      loadText(lastRaw, f.name);
+    };
+    r.readAsText(f);
+  }
+}
+
+// 分頁切換
+$$(".tab").forEach(tab => tab.addEventListener("click", () => {
+  $$(".tab").forEach(t => t.classList.remove("active"));
+  $$(".panel").forEach(p => p.classList.remove("active"));
+  tab.classList.add("active");
+  $(`.panel[data-panel="${tab.dataset.tab}"]`).classList.add("active");
+}));
+
+// 選檔
+$("#dropzone").addEventListener("click", () => $("#fileInput").click());
+$("#fileInput").addEventListener("change", (e) => {
+  const f = e.target.files[0];
+  if (f) handleFile(f);
+});
+// 拖曳
+["dragover", "dragenter"].forEach(ev => $("#dropzone").addEventListener(ev, e => { e.preventDefault(); $("#dropzone").classList.add("drag"); }));
+["dragleave", "drop"].forEach(ev => $("#dropzone").addEventListener(ev, e => { e.preventDefault(); $("#dropzone").classList.remove("drag"); }));
+$("#dropzone").addEventListener("drop", (e) => {
+  const f = e.dataTransfer.files[0];
+  if (f) handleFile(f);
+});
+
+$("#loadBtn").addEventListener("click", () => {
+  const active = $(".tab.active").dataset.tab;
+  if (active === "paste") { lastRaw = $("#pasteArea").value; lastPlain = false; }
+  loadText(lastRaw, undefined, lastPlain);
+});
+$("#chapterSel").addEventListener("change", () => {
+  const i = parseInt($("#chapterSel").value, 10);
+  if (!isNaN(i)) playIndex(i);
+});
+$("#clearBtn").addEventListener("click", () => {
+  stopAll();
+  State.segments = []; State.chapters = []; State.docTitle = ""; State.docId = null; State.marks = []; State.index = -1; lastRaw = "";
+  renderChapters();
+  $("#pasteArea").value = "";
+  $("#dropzone").querySelector("strong").textContent = "點此選檔，或拖曳檔案進來";
+  renderSegments(); updateUI();
+  renderMarksPanel();
+});
+
+// 播放控制
+$("#playBtn").addEventListener("click", togglePlay);
+$("#prevBtn").addEventListener("click", () => { if (State.index > 0) playIndex(State.index - 1); });
+$("#nextBtn").addEventListener("click", () => { if (State.index < State.segments.length - 1) playIndex(State.index + 1); });
+
+// 播放列快速調速：左－減速、右＋加速，點數字回 1.0×
+$("#rateUpBtn").addEventListener("click", () => setRate(stepRate(State.rate, 1)));
+$("#rateDownBtn").addEventListener("click", () => setRate(stepRate(State.rate, -1)));
+$("#rateVal").addEventListener("click", () => setRate(1));
+
+// 設定變動 → 存檔
+SKEYS.forEach(k => {
+  const el = $("#" + k);
+  if (el) el.addEventListener("change", saveSettings);
+});
+$("#segLen").addEventListener("input", updateSegLenUI);
+$("#segAuto").addEventListener("change", updateSegLenUI);
+$("#provider").addEventListener("change", () => { updateProviderUI(); updateSegLenUI(); saveSettings(); });
+$("#model").addEventListener("change", () => { updateProviderUI(); updateSegLenUI(); rememberPrefs(); });
+$("#voice").addEventListener("change", rememberPrefs);
+
+// 設定抽屜：頂欄齒輪開、完成鈕／點背景關；開著時鎖背景捲動（手機上才不會捲到底下的段落）
+$("#settingsBtn").addEventListener("click", openSettings);
+$("#settingsCloseBtn").addEventListener("click", closeSettings);
+$("#settingsBack").addEventListener("click", (e) => { if (e.target.id === "settingsBack") closeSettings(); });
+
+// 回頂部浮鈕（向下捲超過一個螢幕高才浮現）＋點資訊行跳回當前段
+const mainEl = document.querySelector("main");
+mainEl.addEventListener("scroll", () => {
+  $("#topBtn").hidden = mainEl.scrollTop < window.innerHeight;
+}, { passive: true });
+$("#topBtn").addEventListener("click", () => mainEl.scrollTo({ top: 0, behavior: "smooth" }));
+$("#nowText").addEventListener("click", () => {
+  const el = $$(".seg")[State.index];
+  if (el) el.scrollIntoView({ block: "center", behavior: "smooth" });
+});
+$("#clearCacheBtn").addEventListener("click", async () => { await cacheClear(); toast("已清空語音快取"); });
+const THEME_ICONS = {
+  auto:  '<circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18Z" fill="currentColor" stroke="none"/>',
+  light: '<circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M19.1 4.9l-1.8 1.8M6.7 17.3l-1.8 1.8"/>',
+  dark:  '<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5Z"/>',
+};
+const THEME_LABELS = { auto: "外觀：跟隨系統", light: "外觀：淺色", dark: "外觀：深色" };
+function applyTheme() {
+  const t = $("#theme").value;
+  if (t === "auto") delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = t;
+  const dark = t === "dark" || (t === "auto" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.content = dark ? "#12161d" : "#fafaf7";
+  $("#themeIcon").innerHTML = THEME_ICONS[t] || THEME_ICONS.auto;
+  $("#themeBtn").title = THEME_LABELS[t] || THEME_LABELS.auto;
+}
+$("#themeBtn").addEventListener("click", () => {
+  const order = ["auto", "light", "dark"];
+  const next = order[(order.indexOf($("#theme").value) + 1) % order.length];
+  $("#theme").value = next;
+  applyTheme();
+  saveSettings();
+  toast(THEME_LABELS[next]);
+});
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme);
+$("#gender").addEventListener("change", () => { filterVoices(); loadBrowserVoices(); saveSettings(); });
+$("#lang").addEventListener("change", () => { filterVoices(); loadBrowserVoices(); saveSettings(); });
+
+// 瀏覽器語音清單（依語系＋聲色篩選）
+function loadBrowserVoices() {
+  const sel = $("#browserVoice");
+  const all = speechSynthesis.getVoices();
+  const saved = sel.value || (JSON.parse(localStorage.getItem("shuoshu.settings") || "{}")).browserVoice;
+
+  const langPat = LANG_PATTERNS[$("#lang").value];
+  let voices = langPat ? all.filter(v => langPat.test(v.lang) || langPat.test(v.name)) : all.slice();
+  if (!voices.length) voices = all.slice(); // 此語系沒有系統語音就退回全列
+
+  const g = $("#gender").value;
+  if (g !== "any") {
+    const byG = voices.filter(v => guessGender(v) === g);
+    if (byG.length) voices = byG; // 猜不出任何性別就維持原列，不變成空清單
+  }
+
+  // 自動模式中文優先排前面
+  if (!langPat) {
+    const isZh = (v) => /zh|cmn|Chinese|中文/i.test(v.lang + v.name) ? 1 : 0;
+    voices.sort((a, b) => isZh(b) - isZh(a));
+  }
+
+  sel.innerHTML = "";
+  voices.forEach(v => {
+    const o = document.createElement("option");
+    o.value = v.name; o.textContent = `${v.name} (${v.lang})`;
+    if (v.name === saved) o.selected = true;
+    sel.appendChild(o);
+  });
+}
+if ("speechSynthesis" in window) {
+  loadBrowserVoices();
+  speechSynthesis.onvoiceschanged = loadBrowserVoices;
+}
+
+// 鎖屏 / 媒體鍵控制
+if ("mediaSession" in navigator) {
+  navigator.mediaSession.setActionHandler("play", () => { if (!State.playing) togglePlay(); });
+  navigator.mediaSession.setActionHandler("pause", () => { if (State.playing) togglePlay(); });
+  navigator.mediaSession.setActionHandler("previoustrack", () => { if (State.index > 0) playIndex(State.index - 1); });
+  navigator.mediaSession.setActionHandler("nexttrack", () => { if (State.index < State.segments.length - 1) playIndex(State.index + 1); });
+}
+
+/* ============ PWA：service worker + 安裝 ============ */
+(function setupPWA() {
+  if ("serviceWorker" in navigator && location.protocol === "https:") {
+    navigator.serviceWorker.register("./sw.js").catch(() => {});
+  }
+
+  let deferred = null;
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault(); deferred = e; $("#installBtn").hidden = false;
+  });
+  $("#installBtn").addEventListener("click", async () => {
+    if (!deferred) { toast("此瀏覽器用選單的「加到主畫面」即可安裝"); return; }
+    deferred.prompt(); await deferred.userChoice; deferred = null; $("#installBtn").hidden = true;
+  });
+})();
+
+/* ============ 啟動 ============ */
+loadSettings();
+applyTheme();
+updateProviderUI();     // 依還原後的引擎顯示欄位＋重建音色清單
+if ("speechSynthesis" in window) loadBrowserVoices();
+updateSegLenUI();
+State.rate = stepRate(parseFloat(localStorage.getItem("shuoshu.rate")), 0); // 還原上次速度（壞值自動回 1）
+applyRate();
+updateUI();
+renderLibrary();
+renderMarksPanel();
+</script>
 </body>
 </html>

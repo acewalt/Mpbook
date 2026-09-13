@@ -1,19 +1,13 @@
 {
-  "name": "MPBook",
-  "short_name": "MPBook",
-  "description": "Convierte EPUB, Markdown y TXT en audio desde el navegador.",
-  "start_url": "./",
-  "scope": "./",
+  "name": "Audiobook｜有聲書",
+  "short_name": "有聲書",
+  "description": "把 Markdown 用文字轉語音唸出來的有聲書播放器",
+  "start_url": ".",
+  "scope": ".",
   "display": "standalone",
-  "background_color": "#080b12",
-  "theme_color": "#0b1020",
-  "lang": "es",
+  "background_color": "#fafaf7",
+  "theme_color": "#fafaf7",
   "icons": [
-    {
-      "src": "./icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
-    }
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
   ]
 }
