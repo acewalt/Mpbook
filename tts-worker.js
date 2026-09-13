@@ -2,6 +2,23 @@ const PIPER_CDN = 'https://cdn.jsdelivr.net/npm/@realtimex/piper-tts-web@1.1.1/+
 const KOKORO_CDN = 'https://cdn.jsdelivr.net/npm/kokoro-js@1.2.1/+esm';
 const KOKORO_MODEL = 'onnx-community/Kokoro-82M-v1.0-ONNX';
 
+// Piper's browser wrapper configures ONNX Runtime with
+// navigator.hardwareConcurrency. On desktop machines that can make one TTS
+// request fan out across most CPU cores and Chrome may report the page as
+// unresponsive even though inference is running in this worker. Shadow the
+// value *inside this worker only* so local TTS stays responsive.
+(function capWorkerThreads(){
+  const one = () => 1;
+  try {
+    Object.defineProperty(self.navigator, 'hardwareConcurrency', { configurable:true, get:one });
+  } catch {}
+  try {
+    const proto = Object.getPrototypeOf(self.navigator);
+    const desc = Object.getOwnPropertyDescriptor(proto, 'hardwareConcurrency');
+    if(!desc || desc.configurable) Object.defineProperty(proto, 'hardwareConcurrency', { configurable:true, get:one });
+  } catch {}
+})();
+
 let piper = null;
 let piperSession = null;
 let piperVoice = '';
@@ -28,13 +45,21 @@ async function getPiper(id, voice) {
 
   if (!piperSession) {
     progress(id, 'loading-voice');
-    piperSession = new piper.TtsSession({ voiceId: voice, progress: onProgress });
+    piperSession = new piper.TtsSession({
+      voiceId: voice,
+      progress: onProgress,
+      allowLocalModels: true,
+      fallbackStrategy: 'cdn'
+    });
     await piperSession.waitReady;
     piperVoice = voice;
   } else if (piperVoice !== voice) {
+    // Reinitializing the singleton repeatedly can retain a large ONNX session.
+    // Ask the main thread to recreate this worker when changing voices instead
+    // of stacking models in memory. This branch is still kept as a fallback.
     progress(id, 'loading-voice');
     piperSession.voiceId = voice;
-    await piperSession.init();
+    await piperSession.init(true, 'cdn');
     piperVoice = voice;
   }
   return piperSession;
