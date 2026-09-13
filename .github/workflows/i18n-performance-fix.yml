@@ -1,0 +1,43 @@
+name: MPBook i18n performance fix
+
+on:
+  push:
+    paths:
+      - '.github/workflows/i18n-performance-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Keep book text out of the translation observer
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('i18n.js')
+          s=p.read_text(encoding='utf-8')
+          s=s.replace("el.closest('#segList .txt, #markQuote, .lib-title, textarea, input, [contenteditable=\"true\"]')", "el.closest('#segList, #markQuote, .lib-title, textarea, input, [contenteditable=\"true\"]')")
+          s=s.replace("el.closest('#segList .txt, #markQuote, .lib-title')", "el.closest('#segList, #markQuote, .lib-title')")
+          s=s.replace("rec.target.closest?.('#segList .txt, #markQuote, .lib-title')", "rec.target.closest?.('#segList, #markQuote, .lib-title')")
+          s=s.replace("node.closest?.('#segList .txt, #markQuote, .lib-title')", "node.closest?.('#segList, #markQuote, .lib-title')")
+          p.write_text(s,encoding='utf-8')
+          sw=Path('sw.js')
+          w=sw.read_text(encoding='utf-8').replace('mpbook-bilingual-v1','mpbook-bilingual-v2').replace('i18n.js?v=1','i18n.js?v=2')
+          sw.write_text(w,encoding='utf-8')
+          idx=Path('index.html')
+          x=idx.read_text(encoding='utf-8').replace('i18n.js?v=1','i18n.js?v=2')
+          idx.write_text(x,encoding='utf-8')
+          PY
+      - run: rm -f .github/workflows/i18n-performance-fix.yml
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Keep EPUB text out of bilingual UI observer"
+          git push
