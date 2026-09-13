@@ -1,4 +1,12 @@
 (() => {
+  // The base stylesheet gives every settings label display:grid. In Chromium
+  // that can make elements with the `hidden` attribute remain visible.
+  // Force the HTML hidden contract so Browser / Natural / OpenAI controls do
+  // not overlap or fight each other when switching engines.
+  const style = document.createElement('style');
+  style.textContent = '[hidden]{display:none!important}.virtual-note{color:var(--muted);font-family:Inter,ui-sans-serif,sans-serif;font-size:.82rem;padding:8px 12px}';
+  document.head.appendChild(style);
+
   const reader = document.getElementById('readerText');
   if (!reader) return;
 
