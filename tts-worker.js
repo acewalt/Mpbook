@@ -2,6 +2,48 @@ const PIPER_CDN = 'https://cdn.jsdelivr.net/npm/@realtimex/piper-tts-web@1.1.1/+
 const KOKORO_CDN = 'https://cdn.jsdelivr.net/npm/kokoro-js@1.2.1/+esm';
 const KOKORO_MODEL = 'onnx-community/Kokoro-82M-v1.0-ONNX';
 
+// Spanish Piper models are vendored under assets/voices. Piper itself still
+// thinks its model base is Hugging Face, so redirect only those known model
+// requests to this GitHub Pages site. If a file has not arrived yet (for
+// example while the vendor workflow is still running), fall back to upstream.
+const LOCAL_PIPER_FILES = new Set([
+  'es/es_MX/claude/high/es_MX-claude-high.onnx',
+  'es/es_MX/claude/high/es_MX-claude-high.onnx.json',
+  'es/es_MX/ald/medium/es_MX-ald-medium.onnx',
+  'es/es_MX/ald/medium/es_MX-ald-medium.onnx.json',
+  'es/es_ES/davefx/medium/es_ES-davefx-medium.onnx',
+  'es/es_ES/davefx/medium/es_ES-davefx-medium.onnx.json',
+  'es/es_ES/sharvard/medium/es_ES-sharvard-medium.onnx',
+  'es/es_ES/sharvard/medium/es_ES-sharvard-medium.onnx.json',
+  'es/es_ES/mls_10246/low/es_ES-mls_10246-low.onnx',
+  'es/es_ES/mls_10246/low/es_ES-mls_10246-low.onnx.json',
+  'es/es_ES/mls_9972/low/es_ES-mls_9972-low.onnx',
+  'es/es_ES/mls_9972/low/es_ES-mls_9972-low.onnx.json',
+  'es/es_ES/carlfm/x_low/es_ES-carlfm-x_low.onnx',
+  'es/es_ES/carlfm/x_low/es_ES-carlfm-x_low.onnx.json'
+]);
+
+const nativeFetch = self.fetch.bind(self);
+self.fetch = async (input, init) => {
+  try {
+    const sourceUrl = typeof input === 'string' ? input : input?.url;
+    const url = new URL(sourceUrl, self.location.href);
+    const marker = '/piper-voices/resolve/main/';
+    const pos = url.pathname.indexOf(marker);
+    if (url.hostname === 'huggingface.co' && pos >= 0) {
+      const rel = decodeURIComponent(url.pathname.slice(pos + marker.length));
+      if (LOCAL_PIPER_FILES.has(rel)) {
+        const localUrl = new URL(`./assets/voices/${rel}`, self.location.href);
+        const localResponse = await nativeFetch(localUrl, { ...init, cache: 'force-cache' });
+        if (localResponse.ok) return localResponse;
+      }
+    }
+  } catch (err) {
+    console.warn('MPBook local voice redirect failed; using upstream.', err);
+  }
+  return nativeFetch(input, init);
+};
+
 // Piper's browser wrapper configures ONNX Runtime with
 // navigator.hardwareConcurrency. On desktop machines that can make one TTS
 // request fan out across most CPU cores and Chrome may report the page as
@@ -54,9 +96,6 @@ async function getPiper(id, voice) {
     await piperSession.waitReady;
     piperVoice = voice;
   } else if (piperVoice !== voice) {
-    // Reinitializing the singleton repeatedly can retain a large ONNX session.
-    // Ask the main thread to recreate this worker when changing voices instead
-    // of stacking models in memory. This branch is still kept as a fallback.
     progress(id, 'loading-voice');
     piperSession.voiceId = voice;
     await piperSession.init(true, 'cdn');
