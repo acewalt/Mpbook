@@ -1,4 +1,4 @@
-const CACHE='mpbook-v9';
+const CACHE='mpbook-v10';
 const ASSETS=[
   './',
   './index.html',
