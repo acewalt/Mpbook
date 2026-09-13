@@ -9,12 +9,19 @@
   const $ = s => document.querySelector(s);
   const tx = (es,en) => document.documentElement.lang?.startsWith('en') ? en : es;
 
+  function showToast(message, ms=5000){
+    const toast = $('#toast');
+    if(!toast) return;
+    toast.textContent = message;
+    toast.classList.add('show');
+    clearTimeout(window.__mpbookPerfToast);
+    window.__mpbookPerfToast = setTimeout(()=>toast.classList.remove('show'),ms);
+  }
+
   function saveNaturalSettings(event){
     const engine = $('#engineSelect')?.value || 'browser';
     if(engine !== 'natural') return false;
 
-    // Stop the form's original submit handler before it can call renderReader().
-    // Re-rendering a large EPUB while closing the dialog was the source of the freeze.
     event?.preventDefault?.();
     event?.stopPropagation?.();
     event?.stopImmediatePropagation?.();
@@ -35,26 +42,16 @@
 
     const dialog = $('#settingsDialog');
     if(dialog?.open) dialog.close('default');
-
-    const toast = $('#toast');
-    if(toast){
-      toast.textContent = tx('Ajustes guardados.','Settings saved.');
-      toast.classList.add('show');
-      clearTimeout(window.__mpbookSafeSaveToast);
-      window.__mpbookSafeSaveToast = setTimeout(()=>toast.classList.remove('show'),2400);
-    }
+    showToast(tx('Ajustes guardados.','Settings saved.'),2400);
     return true;
   }
 
-  // Intercept the actual button click in capture phase. This happens before the
-  // browser creates the form submit event and is more reliable on iOS Safari.
   document.addEventListener('click', event => {
     const button = event.target?.closest?.('#saveSettingsBtn');
     if(!button) return;
     saveNaturalSettings(event);
   }, true);
 
-  // Backup for keyboard submit / Enter / browsers that bypass the click path.
   const settingsForm = $('#settingsForm');
   if(settingsForm){
     settingsForm.addEventListener('submit', event => {
@@ -63,8 +60,6 @@
     }, true);
   }
 
-  // app.js keeps its own in-memory settings object. Natural TTS reads the saved
-  // values from localStorage, so restore them every time the dialog opens.
   $('#settingsBtn')?.addEventListener('click', () => {
     setTimeout(() => {
       if(localStorage.getItem('mpbook.engine') !== 'natural') return;
@@ -74,23 +69,121 @@
       const rate = $('#rateInput');
       const savedRate = localStorage.getItem('mpbook.rate');
 
-      if(engine){
-        engine.value = 'natural';
-        engine.dispatchEvent(new Event('change',{bubbles:true}));
-      }
-      if(lang){
-        lang.value = savedLang;
-        lang.dispatchEvent(new Event('change',{bubbles:true}));
-      }
-      if(rate && savedRate){
-        rate.value = savedRate;
-        rate.dispatchEvent(new Event('input',{bubbles:true}));
-      }
+      if(engine){ engine.value='natural'; engine.dispatchEvent(new Event('change',{bubbles:true})); }
+      if(lang){ lang.value=savedLang; lang.dispatchEvent(new Event('change',{bubbles:true})); }
+      if(rate && savedRate){ rate.value=savedRate; rate.dispatchEvent(new Event('input',{bubbles:true})); }
     }, 0);
   });
 
-  // Virtualize very large chapter rendering. app.js can build thousands of
-  // fragment <p> strings; only keep a small window around the active fragment.
+  // Parse EPUB files in a dedicated Worker before app.js sees them.
+  function dbPutBook(book){
+    return new Promise((resolve,reject)=>{
+      const req=indexedDB.open('mpbook-library',1);
+      req.onupgradeneeded=()=>{
+        if(!req.result.objectStoreNames.contains('books')) req.result.createObjectStore('books',{keyPath:'id'});
+      };
+      req.onerror=()=>reject(req.error);
+      req.onsuccess=()=>{
+        const db=req.result;
+        const tx=db.transaction('books','readwrite');
+        tx.objectStore('books').put(book);
+        tx.oncomplete=()=>{try{db.close();}catch{} resolve();};
+        tx.onerror=()=>{try{db.close();}catch{} reject(tx.error);};
+      };
+    });
+  }
+
+  function parseEpubWorker(file){
+    return file.arrayBuffer().then(buffer=>new Promise((resolve,reject)=>{
+      const worker=new Worker('./epub-worker.js?v=13');
+      let done=false;
+      const finish=(fn,value)=>{
+        if(done) return;
+        done=true;
+        clearTimeout(timer);
+        try{worker.terminate();}catch{}
+        fn(value);
+      };
+      const timer=setTimeout(()=>finish(reject,new Error('EPUB worker timeout')),120000);
+      worker.onmessage=e=>{
+        const msg=e.data||{};
+        if(msg.type==='progress'){
+          const tail=msg.total?` · ${msg.done}/${msg.total}`:'';
+          showToast(`${tx('Procesando EPUB','Processing EPUB')}… ${msg.value||0}%${tail}`,5000);
+          return;
+        }
+        if(msg.type==='result') finish(resolve,msg.book);
+        else if(msg.type==='error') finish(reject,new Error(msg.message||'EPUB worker error'));
+      };
+      worker.onerror=e=>finish(reject,new Error(e?.message||'EPUB worker error'));
+      worker.postMessage({
+        type:'parse',
+        buffer,
+        meta:{name:file.name,size:file.size,lastModified:file.lastModified},
+        lang:document.documentElement.lang?.startsWith('en')?'en':'es'
+      },[buffer]);
+    }));
+  }
+
+  async function openStoredBook(id){
+    const libraryBtn=$('#libraryBtn');
+    if(!libraryBtn) throw new Error('Library unavailable');
+    libraryBtn.click();
+    const deadline=Date.now()+7000;
+    while(Date.now()<deadline){
+      await new Promise(r=>setTimeout(r,60));
+      const row=[...document.querySelectorAll('#libraryList .library-item')].find(el=>el.dataset.id===id);
+      const open=row?.querySelector('.open-book');
+      if(open){ open.click(); return; }
+    }
+    throw new Error('Parsed book was saved but could not be opened');
+  }
+
+  let epubBusy=false;
+  async function handleEpubOffMain(file){
+    if(epubBusy || !file) return;
+    epubBusy=true;
+    showToast(tx('Procesando EPUB en segundo plano…','Processing EPUB in the background…'),5000);
+    try{
+      const book=await parseEpubWorker(file);
+      await dbPutBook(book);
+      await openStoredBook(book.id);
+      showToast(tx('Libro cargado.','Book loaded.'),2600);
+    }catch(err){
+      console.error('MPBook EPUB worker path failed',err);
+      showToast(`${tx('No pude abrir este EPUB.','I could not open this EPUB.')} ${String(err?.message||err)}`,7000);
+    }finally{
+      epubBusy=false;
+      const input=$('#fileInput');
+      if(input) input.value='';
+    }
+  }
+
+  const fileInput=$('#fileInput');
+  if(fileInput){
+    fileInput.addEventListener('change',event=>{
+      const file=event.target?.files?.[0];
+      if(!file?.name?.toLowerCase().endsWith('.epub')) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      handleEpubOffMain(file);
+    },true);
+  }
+
+  const dropZone=$('#dropZone');
+  if(dropZone){
+    dropZone.addEventListener('drop',event=>{
+      const file=event.dataTransfer?.files?.[0];
+      if(!file?.name?.toLowerCase().endsWith('.epub')) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      dropZone.classList.remove('dragover');
+      handleEpubOffMain(file);
+    },true);
+  }
+
   const reader = document.getElementById('readerText');
   if(!reader) return;
 
