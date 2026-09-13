@@ -15,8 +15,8 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Patch MPBook natural voices
-        shell: python
         run: |
+          python - <<'PY'
           from pathlib import Path
 
           def once(text, old, new, label):
@@ -53,32 +53,34 @@ jobs:
               '  if (provider === "gemini") return 4000;\n  if (provider === "kokoro") return 320;\n  if (provider === "browser") return 800;',
               'natural segment length')
 
-          kokoro_provider = '''  kokoro: {
-    label: "自然語音（Hugging Face · Kokoro）",
-    voices: [
-      { id: "natural-auto", label: "Auto · ES / EN", g: "n" },
-      { id: "ef_dora", label: "Dora · ES · ♀", g: "f", lang: "es" },
-      { id: "em_alex", label: "Alex · ES · ♂", g: "m", lang: "es" },
-      { id: "em_santa", label: "Santa · ES · ♂", g: "m", lang: "es" },
-      { id: "af_heart", label: "Heart · EN-US · ♀", g: "f", lang: "en" },
-      { id: "af_bella", label: "Bella · EN-US · ♀", g: "f", lang: "en" },
-      { id: "af_nicole", label: "Nicole · EN-US · ♀", g: "f", lang: "en" },
-      { id: "af_sarah", label: "Sarah · EN-US · ♀", g: "f", lang: "en" },
-      { id: "am_michael", label: "Michael · EN-US · ♂", g: "m", lang: "en" },
-      { id: "am_fenrir", label: "Fenrir · EN-US · ♂", g: "m", lang: "en" },
-      { id: "am_puck", label: "Puck · EN-US · ♂", g: "m", lang: "en" },
-      { id: "bf_emma", label: "Emma · EN-GB · ♀", g: "f", lang: "en" },
-      { id: "bf_isabella", label: "Isabella · EN-GB · ♀", g: "f", lang: "en" },
-      { id: "bm_george", label: "George · EN-GB · ♂", g: "m", lang: "en" },
-      { id: "bm_fable", label: "Fable · EN-GB · ♂", g: "m", lang: "en" },
-    ],
-    models: null,
-    synth: (t, c) => {
-      if (!window.MPBookNatural?.synth) throw new Error("Natural voice runtime is not ready");
-      return window.MPBookNatural.synth(t, c);
-    },
-  },
-'''
+          kp = [
+              '  kokoro: {',
+              '    label: "自然語音（Hugging Face · Kokoro）",',
+              '    voices: [',
+              '      { id: "natural-auto", label: "Auto · ES / EN", g: "n" },',
+              '      { id: "ef_dora", label: "Dora · ES · ♀", g: "f", lang: "es" },',
+              '      { id: "em_alex", label: "Alex · ES · ♂", g: "m", lang: "es" },',
+              '      { id: "em_santa", label: "Santa · ES · ♂", g: "m", lang: "es" },',
+              '      { id: "af_heart", label: "Heart · EN-US · ♀", g: "f", lang: "en" },',
+              '      { id: "af_bella", label: "Bella · EN-US · ♀", g: "f", lang: "en" },',
+              '      { id: "af_nicole", label: "Nicole · EN-US · ♀", g: "f", lang: "en" },',
+              '      { id: "af_sarah", label: "Sarah · EN-US · ♀", g: "f", lang: "en" },',
+              '      { id: "am_michael", label: "Michael · EN-US · ♂", g: "m", lang: "en" },',
+              '      { id: "am_fenrir", label: "Fenrir · EN-US · ♂", g: "m", lang: "en" },',
+              '      { id: "am_puck", label: "Puck · EN-US · ♂", g: "m", lang: "en" },',
+              '      { id: "bf_emma", label: "Emma · EN-GB · ♀", g: "f", lang: "en" },',
+              '      { id: "bf_isabella", label: "Isabella · EN-GB · ♀", g: "f", lang: "en" },',
+              '      { id: "bm_george", label: "George · EN-GB · ♂", g: "m", lang: "en" },',
+              '      { id: "bm_fable", label: "Fable · EN-GB · ♂", g: "m", lang: "en" },',
+              '    ],',
+              '    models: null,',
+              '    synth: (t, c) => {',
+              '      if (!window.MPBookNatural?.synth) throw new Error("Natural voice runtime is not ready");',
+              '      return window.MPBookNatural.synth(t, c);',
+              '    },',
+              '  },',
+          ]
+          kokoro_provider = '\n'.join(kp) + '\n'
           s = once(s,
               'const PROVIDERS = {\n  openai: {',
               'const PROVIDERS = {\n' + kokoro_provider + '  openai: {',
@@ -134,15 +136,13 @@ jobs:
 
           p = Path('sw.js')
           s = p.read_text(encoding='utf-8')
-          s = once(s,
-              'const CACHE = "mpbook-bilingual-v2";',
-              'const CACHE = "mpbook-natural-v1";',
-              'service worker cache')
+          s = once(s, 'const CACHE = "mpbook-bilingual-v2";', 'const CACHE = "mpbook-natural-v1";', 'service worker cache')
           s = once(s,
               'const ASSETS = ["./", "./index.html", "./manifest.webmanifest", "./icon.svg", "./i18n.js?v=2"];',
               'const ASSETS = ["./", "./index.html", "./manifest.webmanifest", "./icon.svg", "./i18n.js?v=3", "./natural-voices.js?v=1"];',
               'service worker assets')
           p.write_text(s, encoding='utf-8')
+          PY
 
       - name: Remove installer workflow
         run: rm -f .github/workflows/add-natural-hf-voices.yml
