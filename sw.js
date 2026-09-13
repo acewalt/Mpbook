@@ -1,4 +1,4 @@
-const CACHE='mpbook-v10';
+const CACHE='mpbook-v11';
 const ASSETS=[
   './',
   './index.html',
@@ -7,7 +7,7 @@ const ASSETS=[
   './export-audio.js?v=8',
   './app.js?v=8',
   './local-tts.js?v=8',
-  './tts-worker.js?v=8',
+  './tts-worker.js?v=11',
   './manifest.webmanifest',
   './icon.svg'
 ];
