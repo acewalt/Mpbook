@@ -4,7 +4,8 @@
   if (!window.chrome?.webview) return;
 
   const CHANNEL = "mpbook-native";
-  const PREF_KEY = "mpbook.windowsPreferred.v1";
+  const WINDOWS_PREF_KEY = "mpbook.windowsPreferred.v2";
+  const SAPI_PREF_KEY = "mpbook.sapiPreferred.v1";
   let seq = 0;
   const pending = new Map();
 
@@ -47,6 +48,11 @@
     return Array.isArray(result) ? result : [];
   }
 
+  async function listSapiVoices() {
+    const result = await request("listSapiVoices");
+    return Array.isArray(result) ? result : [];
+  }
+
   async function synth(text, cfg) {
     try { setStatus("loading", tr("Generando con Windows…", "Generating with Windows…")); } catch (_) {}
     const result = await request("synth", {
@@ -56,7 +62,61 @@
     return base64ToBlob(result?.base64 || "", result?.mime || "audio/wav");
   }
 
-  window.MPBookWindows = { request, listVoices, synth };
+  async function synthSapi(text, cfg) {
+    try { setStatus("loading", tr("Generando con Windows SAPI…", "Generating with Windows SAPI…")); } catch (_) {}
+    const result = await request("synthSapi", {
+      text: String(text || ""),
+      voiceId: cfg?.voice || "",
+    });
+    return base64ToBlob(result?.base64 || "", result?.mime || "audio/wav");
+  }
+
+  window.MPBookWindows = { request, listVoices, listSapiVoices, synth, synthSapi };
+
+  function normalizeVoices(nativeVoices, source) {
+    return nativeVoices.map((v) => {
+      const gender = String(v.gender || "").toLowerCase();
+      const g = gender === "male" ? "m" : gender === "female" ? "f" : "n";
+      const symbol = g === "m" ? "♂" : g === "f" ? "♀" : "";
+      const name = v.name || v.id || "Windows voice";
+      const locale = v.language || "";
+      const naturalTag = v.natural && !/natural|neural/i.test(name) ? " · Natural" : "";
+      const adapterTag = source === "sapi" && v.adapter ? " · Adapter" : "";
+      return {
+        id: v.id,
+        label: `${name}${naturalTag}${adapterTag}${locale ? " · " + locale : ""}${symbol ? " · " + symbol : ""}`,
+        g,
+        lang: String(locale).split(/[-_]/)[0].toLowerCase(),
+        nativeLanguage: locale,
+        natural: !!v.natural,
+        adapter: !!v.adapter,
+      };
+    });
+  }
+
+  function ensureProviderOption(value, beforeValues = []) {
+    const select = document.querySelector("#provider");
+    if (!select || select.querySelector(`option[value="${value}"]`)) return select;
+    const option = document.createElement("option");
+    option.value = value;
+    let before = null;
+    for (const candidate of beforeValues) {
+      before = select.querySelector(`option[value="${candidate}"]`);
+      if (before) break;
+    }
+    select.insertBefore(option, before);
+    return select;
+  }
+
+  function ensureHint(provider, id) {
+    const cloud = document.querySelector("#cloudFields");
+    if (!cloud || document.querySelector("#" + id)) return;
+    const field = document.createElement("div");
+    field.className = "field";
+    field.dataset.p = provider;
+    field.innerHTML = `<div class="hint" id="${id}"></div>`;
+    cloud.insertBefore(field, cloud.firstChild);
+  }
 
   function patchSettingsPersistence() {
     try {
@@ -67,15 +127,14 @@
         try {
           const actual = document.querySelector("#provider")?.value || "";
           const saved = JSON.parse(localStorage.getItem("shuoshu.settings") || "{}");
-          if (actual === "windows") {
-            // El HTML base no conoce este proveedor al arrancar. Guardamos un fallback seguro
-            // y recordamos Windows aparte para restaurarlo cuando el bridge nativo esté listo.
+          if (actual === "windows" || actual === "sapi") {
             saved.provider = "kokoro";
             localStorage.setItem("shuoshu.settings", JSON.stringify(saved));
-            localStorage.setItem(PREF_KEY, "1");
-          } else {
-            localStorage.removeItem(PREF_KEY);
           }
+          if (actual === "windows") localStorage.setItem(WINDOWS_PREF_KEY, "1");
+          else localStorage.removeItem(WINDOWS_PREF_KEY);
+          if (actual === "sapi") localStorage.setItem(SAPI_PREF_KEY, "1");
+          else localStorage.removeItem(SAPI_PREF_KEY);
         } catch (_) {}
       };
 
@@ -99,7 +158,7 @@
         const originalCfgNow = cfgNow;
         cfgNow = function () {
           const cfg = originalCfgNow();
-          if (cfg.provider === "windows") cfg.key = "local";
+          if (cfg.provider === "windows" || cfg.provider === "sapi") cfg.key = "local";
           return cfg;
         };
         window.__mpbookWindowsCfgPatched = true;
@@ -111,6 +170,7 @@
         const originalAutoSegLen = autoSegLen;
         autoSegLen = function (provider, model) {
           if (provider === "windows") return 800;
+          if (provider === "sapi") return 650;
           return originalAutoSegLen(provider, model);
         };
         window.__mpbookWindowsSegPatched = true;
@@ -126,10 +186,11 @@
       if (btn) btn.removeEventListener("click", originalOpenExportModal);
 
       openExportModal = async function () {
-        if (document.querySelector("#provider")?.value === "windows") {
+        const provider = document.querySelector("#provider")?.value;
+        if (provider === "windows" || provider === "sapi") {
           toast(tr(
-            "La exportación con Windows Natural se habilitará después de validar la síntesis en tu PC. Para exportar ahora usa Piper, Kokoro o un motor cloud.",
-            "Windows Natural export will be enabled after native synthesis is validated on your PC. For now use Piper, Kokoro, or a cloud engine to export."
+            "Primero validaremos la reproducción nativa en tu PC. Para exportar por ahora usa Piper, Kokoro o un motor cloud.",
+            "Native playback must be validated on your PC first. For export, use Piper, Kokoro, or a cloud engine for now."
           ), true);
           return;
         }
@@ -142,78 +203,76 @@
   }
 
   function updateLabels() {
-    const option = document.querySelector('#provider option[value="windows"]');
-    if (option) option.textContent = tr("Windows · voces instaladas", "Windows · installed voices");
-    const hint = document.querySelector("#windowsVoiceHint");
-    if (hint) {
-      hint.textContent = tr(
-        "Usa directamente las voces que Windows expone a su API nativa. Si Jorge, Dalia, Álvaro o Elvira (Natural) aparecen aquí, MPBook puede utilizarlas sin cargar Kokoro ni Piper.",
-        "Uses voices exposed by the native Windows speech API. If Jorge, Dalia, Álvaro, or Elvira (Natural) appear here, MPBook can use them without loading Kokoro or Piper."
+    const windowsOption = document.querySelector('#provider option[value="windows"]');
+    if (windowsOption) windowsOption.textContent = tr("Windows · voces del sistema", "Windows · system voices");
+
+    const sapiOption = document.querySelector('#provider option[value="sapi"]');
+    if (sapiOption) sapiOption.textContent = tr("Windows SAPI · Natural", "Windows SAPI · Natural");
+
+    const windowsHint = document.querySelector("#windowsVoiceHint");
+    if (windowsHint) {
+      windowsHint.textContent = tr(
+        "Usa las voces que Windows expone mediante Windows.Media.SpeechSynthesis.",
+        "Uses voices exposed through Windows.Media.SpeechSynthesis."
       );
     }
-    try { if (PROVIDERS?.windows) PROVIDERS.windows.label = option?.textContent || "Windows"; } catch (_) {}
+
+    const sapiHint = document.querySelector("#sapiVoiceHint");
+    if (sapiHint) {
+      sapiHint.textContent = tr(
+        "Usa SAPI 5. Con NaturalVoiceSAPIAdapter instalado, aquí pueden aparecer Jorge, Dalia, Álvaro, Elvira y otras voces Natural importadas.",
+        "Uses SAPI 5. With NaturalVoiceSAPIAdapter installed, Jorge, Dalia, Álvaro, Elvira and other imported Natural voices can appear here."
+      );
+    }
+
+    try { if (PROVIDERS?.windows) PROVIDERS.windows.label = windowsOption?.textContent || "Windows"; } catch (_) {}
+    try { if (PROVIDERS?.sapi) PROVIDERS.sapi.label = sapiOption?.textContent || "Windows SAPI"; } catch (_) {}
   }
 
-  async function installProvider() {
+  async function installProviders() {
     if (typeof PROVIDERS === "undefined") return;
 
-    let nativeVoices = [];
-    try {
-      nativeVoices = await listVoices();
-    } catch (err) {
-      console.warn("MPBook Windows bridge:", err);
-      return;
-    }
-    if (!nativeVoices.length) return;
+    const [nativeVoices, sapiVoices] = await Promise.all([
+      listVoices().catch((err) => { console.warn("MPBook WinRT bridge:", err); return []; }),
+      listSapiVoices().catch((err) => { console.warn("MPBook SAPI bridge:", err); return []; }),
+    ]);
 
-    const voices = nativeVoices.map((v) => {
-      const gender = String(v.gender || "").toLowerCase();
-      const g = gender === "male" ? "m" : gender === "female" ? "f" : "n";
-      const symbol = g === "m" ? "♂" : g === "f" ? "♀" : "";
-      const name = v.name || v.id || "Windows voice";
-      const locale = v.language || "";
-      const naturalTag = v.natural && !/natural/i.test(name) ? " · Natural" : "";
-      return {
-        id: v.id,
-        label: `${name}${naturalTag}${locale ? " · " + locale : ""}${symbol ? " · " + symbol : ""}`,
-        g,
-        lang: String(locale).split(/[-_]/)[0].toLowerCase(),
-        nativeLanguage: locale,
-        natural: !!v.natural,
+    if (nativeVoices.length) {
+      PROVIDERS.windows = {
+        label: "Windows",
+        voices: normalizeVoices(nativeVoices, "winrt"),
+        models: null,
+        synth: (text, cfg) => window.MPBookWindows.synth(text, cfg),
       };
-    });
-
-    PROVIDERS.windows = {
-      label: "Windows",
-      voices,
-      models: null,
-      synth: (text, cfg) => window.MPBookWindows.synth(text, cfg),
-    };
-
-    const select = document.querySelector("#provider");
-    if (select && !select.querySelector('option[value="windows"]')) {
-      const option = document.createElement("option");
-      option.value = "windows";
-      const piper = select.querySelector('option[value="piper"]');
-      select.insertBefore(option, piper || select.querySelector('option[value="kokoro"]') || null);
+      ensureProviderOption("windows", ["piper", "kokoro", "browser"]);
+      ensureHint("windows", "windowsVoiceHint");
     }
 
-    const cloud = document.querySelector("#cloudFields");
-    if (cloud && !document.querySelector("#windowsVoiceHint")) {
-      const field = document.createElement("div");
-      field.className = "field";
-      field.dataset.p = "windows";
-      field.innerHTML = '<div class="hint" id="windowsVoiceHint"></div>';
-      cloud.insertBefore(field, cloud.firstChild);
+    if (sapiVoices.length) {
+      PROVIDERS.sapi = {
+        label: "Windows SAPI",
+        voices: normalizeVoices(sapiVoices, "sapi"),
+        models: null,
+        synth: (text, cfg) => window.MPBookWindows.synthSapi(text, cfg),
+      };
+      ensureProviderOption("sapi", ["windows", "piper", "kokoro", "browser"]);
+      ensureHint("sapi", "sapiVoiceHint");
     }
+
+    if (!nativeVoices.length && !sapiVoices.length) return;
 
     patchLocalProvider();
     patchSettingsPersistence();
     patchExportGuard();
     updateLabels();
 
+    const select = document.querySelector("#provider");
     try {
-      if (localStorage.getItem(PREF_KEY) === "1") select.value = "windows";
+      if (localStorage.getItem(SAPI_PREF_KEY) === "1" && select?.querySelector('option[value="sapi"]')) {
+        select.value = "sapi";
+      } else if (localStorage.getItem(WINDOWS_PREF_KEY) === "1" && select?.querySelector('option[value="windows"]')) {
+        select.value = "windows";
+      }
     } catch (_) {}
 
     try { updateProviderUI(); } catch (_) {}
@@ -224,5 +283,5 @@
     });
   }
 
-  installProvider();
+  installProviders();
 })();

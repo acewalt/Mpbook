@@ -127,33 +127,26 @@
     } catch (_) {}
   }
 
-  function loadDesktopBridge() {
-    try {
-      if (!window.chrome?.webview) return;
-      if (document.querySelector('script[data-mpbook-desktop]')) return;
-      const bridge = document.createElement("script");
-      bridge.src = "./desktop-bridge.js?v=1";
-      bridge.dataset.mpbookDesktop = "1";
-      document.body.appendChild(bridge);
-    } catch (_) {}
-  }
-
-  // Piper se registra como un motor adicional sin agrandar index.html. Si MPBook se está
-  // ejecutando dentro de la app de Windows, el bridge nativo se carga después de Piper para
-  // que ambos parches de persistencia queden encadenados en un orden determinista.
+  // Piper se registra como un motor adicional sin agrandar index.html.
   try {
     if (!document.querySelector('script[data-mpbook-piper]')) {
       const script = document.createElement("script");
       script.src = "./piper-voices.js?v=2";
       script.dataset.mpbookPiper = "1";
-      script.addEventListener("load", () => {
-        fixPiperVoiceGenders();
-        loadDesktopBridge();
-      }, { once: true });
+      script.addEventListener("load", fixPiperVoiceGenders, { once: true });
       document.body.appendChild(script);
     } else {
       setTimeout(fixPiperVoiceGenders, 0);
-      setTimeout(loadDesktopBridge, 0);
+    }
+  } catch (_) {}
+
+  // Dentro de MPBook Desktop, carga el puente nativo. En un navegador normal no hace nada.
+  try {
+    if (window.chrome?.webview && !document.querySelector('script[data-mpbook-desktop]')) {
+      const script = document.createElement("script");
+      script.src = "./desktop-bridge.js?v=2";
+      script.dataset.mpbookDesktop = "1";
+      document.body.appendChild(script);
     }
   } catch (_) {}
 })();
