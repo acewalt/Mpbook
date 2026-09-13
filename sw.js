@@ -1,14 +1,15 @@
-const CACHE='mpbook-v14';
+const CACHE='mpbook-v15';
 const ASSETS=[
   './',
   './index.html',
   './styles.css',
-  './app-v2.js?v=14',
-  './export-audio.js?v=14',
-  './local-tts.js?v=14',
-  './tts-worker.js?v=14',
-  './epub-worker.js?v=14',
-  './storage-worker.js?v=14',
+  './app-v2.js?v=15',
+  './settings-bridge.js?v=15',
+  './export-audio.js?v=15',
+  './local-tts.js?v=15',
+  './tts-worker.js?v=15',
+  './epub-worker.js?v=15',
+  './storage-worker.js?v=15',
   './manifest.webmanifest',
   './icon.svg'
 ];
