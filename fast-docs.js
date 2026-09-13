@@ -87,7 +87,7 @@
 
   function legacyCall(type,payload={}){
     return new Promise((resolve,reject)=>{
-      const worker=new Worker('./storage-worker.js?v=17');
+      const worker=new Worker('./storage-worker.js?v=18');
       const requestId=1;
       let finished=false;
       const timer=setTimeout(()=>finish(reject,new Error('Legacy library timeout')),30000);
@@ -105,27 +105,128 @@
     });
   }
 
-  function parseCompactEpub(file){
-    return file.arrayBuffer().then(buffer=>new Promise((resolve,reject)=>{
-      const worker=new Worker('./epub-worker.js?v=17');
-      let finished=false;
-      const timer=setTimeout(()=>finish(reject,new Error('EPUB timeout')),60000);
-      function finish(fn,value){
-        if(finished)return;
-        finished=true;clearTimeout(timer);try{worker.terminate();}catch{}fn(value);
+  /* EPUB reader: intentionally mirrors the original app's simple flow.
+     Read ZIP -> flatten XHTML into plain text -> open immediately.
+     No TTS/model work happens here. */
+  function zipDirectory(buffer){
+    const dv=new DataView(buffer),bytes=new Uint8Array(buffer);
+    let eocd=-1;
+    for(let i=buffer.byteLength-22;i>=Math.max(0,buffer.byteLength-65557);i--){
+      if(dv.getUint32(i,true)===0x06054b50){eocd=i;break;}
+    }
+    if(eocd<0)throw new Error(tx('EPUB/ZIP inválido.','Invalid EPUB/ZIP.'));
+    const count=dv.getUint16(eocd+10,true);
+    let offset=dv.getUint32(eocd+16,true);
+    const map=new Map();
+    for(let i=0;i<count;i++){
+      if(offset+46>buffer.byteLength||dv.getUint32(offset,true)!==0x02014b50)break;
+      const method=dv.getUint16(offset+10,true);
+      const size=dv.getUint32(offset+20,true);
+      const nameLen=dv.getUint16(offset+28,true);
+      const extraLen=dv.getUint16(offset+30,true);
+      const commentLen=dv.getUint16(offset+32,true);
+      const local=dv.getUint32(offset+42,true);
+      const name=new TextDecoder().decode(bytes.subarray(offset+46,offset+46+nameLen));
+      map.set(name,{method,size,local});
+      offset+=46+nameLen+extraLen+commentLen;
+    }
+    return map;
+  }
+
+  async function zipRead(buffer,entry){
+    const dv=new DataView(buffer);
+    const localName=dv.getUint16(entry.local+26,true);
+    const localExtra=dv.getUint16(entry.local+28,true);
+    const start=entry.local+30+localName+localExtra;
+    const packed=new Uint8Array(buffer,start,entry.size);
+    if(entry.method===0)return packed;
+    if(entry.method!==8)throw new Error(tx('Método ZIP no compatible.','Unsupported ZIP compression.'));
+    if(!('DecompressionStream' in window))throw new Error(tx('Este navegador no puede descomprimir EPUB.','This browser cannot decompress EPUB.'));
+    const stream=new Blob([packed]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  }
+
+  function normalizePath(path){
+    const out=[];
+    for(const raw of decodeURIComponent(String(path||'')).split('/')){
+      if(!raw||raw==='.')continue;
+      if(raw==='..')out.pop();else out.push(raw);
+    }
+    return out.join('/');
+  }
+
+  function htmlToPlain(html){
+    const doc=new DOMParser().parseFromString(html,'text/html');
+    if(!doc.body)return'';
+    doc.body.querySelectorAll('script,style,nav,aside,figure,table,sup,svg,form,noscript').forEach(n=>n.remove());
+    const out=[];
+    const nodes=doc.body.querySelectorAll('h1,h2,h3,h4,h5,h6,p,blockquote,li,div,td');
+    for(const el of nodes){
+      if(el.querySelector('h1,h2,h3,h4,h5,h6,p,blockquote,li,div'))continue;
+      let text=(el.textContent||'').replace(/\s+/g,' ').trim();
+      if(!text)continue;
+      if(/^H[1-6]$/.test(el.tagName)){
+        text=text.replace(/[.!?。！？]$/,'')+'.';
+        if(/^H[12]$/.test(el.tagName))text=CHAP_MARK+text;
       }
-      worker.onmessage=e=>{
-        const m=e.data||{};
-        if(m.type==='progress'){
-          if(m.value===5||m.value>=90||m.done===m.total)toast(`${tx('Procesando EPUB','Processing EPUB')}… ${m.value||0}%`,2500);
-          return;
-        }
-        if(m.type==='result-compact')finish(resolve,m.doc);
-        else if(m.type==='error')finish(reject,new Error(m.message||'EPUB error'));
-      };
-      worker.onerror=e=>finish(reject,new Error(e?.message||'EPUB worker error'));
-      worker.postMessage({type:'parse-compact',buffer,meta:{name:file.name,size:file.size,lastModified:file.lastModified},lang:document.documentElement.lang?.startsWith('en')?'en':'es'},[buffer]);
-    }));
+      out.push(text);
+    }
+    if(!out.length){
+      const text=(doc.body.textContent||'').replace(/\s+/g,' ').trim();
+      if(text)out.push(text);
+    }
+    return out.join('\n\n');
+  }
+
+  async function epubToCompactDoc(file){
+    const buffer=await file.arrayBuffer();
+    const entries=zipDirectory(buffer);
+    const decoder=new TextDecoder();
+    const readText=async path=>{
+      const entry=entries.get(path);
+      if(!entry)return null;
+      return decoder.decode(await zipRead(buffer,entry));
+    };
+
+    const container=await readText('META-INF/container.xml');
+    if(!container)throw new Error(tx('Falta container.xml.','Missing container.xml.'));
+    const root=(container.match(/full-path\s*=\s*["']([^"']+)["']/i)||[])[1];
+    if(!root)throw new Error(tx('No encontré el archivo OPF.','OPF file not found.'));
+    const opfText=await readText(root);
+    if(!opfText)throw new Error(tx('No pude leer el OPF.','Could not read OPF.'));
+
+    const opf=new DOMParser().parseFromString(opfText,'application/xml');
+    const title=(opf.getElementsByTagNameNS('*','title')[0]?.textContent||'').trim()||file.name.replace(/\.epub$/i,'');
+    const manifest={};
+    for(const item of opf.querySelectorAll('manifest > item')){
+      const id=item.getAttribute('id'),href=item.getAttribute('href');
+      if(id&&href)manifest[id]=href;
+    }
+    const refs=[...opf.querySelectorAll('spine > itemref')]
+      .map(x=>manifest[x.getAttribute('idref')])
+      .filter(Boolean);
+    if(!refs.length)throw new Error(tx('El EPUB no tiene contenido de lectura.','The EPUB has no readable spine.'));
+
+    const base=root.includes('/')?root.slice(0,root.lastIndexOf('/')+1):'';
+    const parts=[];
+    for(const href of refs){
+      const path=normalizePath(base+href.replace(/#.*$/,''));
+      const html=await readText(path);
+      if(!html)continue;
+      const plain=htmlToPlain(html);
+      if(plain)parts.push(plain);
+    }
+    const raw=parts.join('\n\n').trim();
+    if(!raw)throw new Error(tx('El EPUB no contiene texto legible.','The EPUB contains no readable text.'));
+    return {
+      id:`epub:${file.name}:${file.size}:${file.lastModified}`,
+      title,
+      type:'EPUB',
+      filename:file.name,
+      raw,
+      plain:true,
+      updatedAt:Date.now()
+    };
   }
 
   function splitSegments(text,max=680){
@@ -158,7 +259,10 @@
       const chunk=chunks[i].trim();if(!chunk)continue;
       let title=`${tx('Capítulo','Chapter')} ${i+1}`,body=chunk;
       const sep=chunk.indexOf('\n\n');
-      if(raw.includes(CHAP_MARK)&&sep>=0){title=chunk.slice(0,sep).replace(/[\r\n]+/g,' ').trim()||title;body=chunk.slice(sep+2);}
+      if(raw.includes(CHAP_MARK)&&sep>=0){
+        title=chunk.slice(0,sep).replace(/[\r\n]+/g,' ').replace(/[.]$/,'').trim()||title;
+        body=chunk.slice(sep+2);
+      }
       const segments=splitSegments(body);
       if(segments.length)chapters.push({title,segments});
     }
@@ -175,14 +279,18 @@
   }
 
   async function importEpub(file){
-    toast(tx('Procesando EPUB…','Processing EPUB…'),3000);
+    const dropTitle=$('#dropZone strong');
+    const oldText=dropTitle?.textContent||'';
+    if(dropTitle)dropTitle.textContent=file.name;
     try{
-      const doc=await parseCompactEpub(file);
-      await putFastDoc(doc);
+      const doc=await epubToCompactDoc(file);
+      // Open first, exactly like the original flow. Persistence happens afterwards.
       await openCompactDoc(doc);
-      toast(tx('Libro cargado.','Book loaded.'),2200);
+      putFastDoc(doc).catch(err=>console.warn('MPBook background library save failed',err));
+      toast(tx('Libro cargado.','Book loaded.'),1800);
     }catch(err){
-      console.error('MPBook compact EPUB import failed',err);
+      console.error('MPBook EPUB import failed',err);
+      if(dropTitle)dropTitle.textContent=oldText;
       toast(`${tx('No pude abrir este EPUB.','I could not open this EPUB.')} ${String(err?.message||err)}`,7000);
     }finally{
       const input=$('#fileInput');if(input)input.value='';
@@ -201,7 +309,6 @@
 
   async function renderFastLibrary(){
     const list=$('#libraryList'),empty=$('#emptyLibrary');if(!list)return;
-    list.innerHTML=`<div class="virtual-note">${tx('Cargando biblioteca…','Loading library…')}</div>`;
     const docs=await combinedMeta();
     empty.hidden=docs.length>0;
     list.innerHTML=docs.map(d=>`<div class="library-item" data-id="${String(d.id).replace(/"/g,'&quot;')}"><div><strong></strong><small>${d.type||'EPUB'} · ${d.chapters||0} ${tx('capítulos','chapters')}</small></div><div class="library-item-actions"><button class="tiny-btn open-book" type="button">${tx('Abrir','Open')}</button><button class="tiny-btn delete-book" type="button">${tx('Eliminar','Delete')}</button></div></div>`).join('');
@@ -211,9 +318,8 @@
   async function openById(id){
     let doc=await getFastDoc(id);
     if(!doc){
-      toast(tx('Migrando libro antiguo…','Migrating old book…'),4000);
       doc=await legacyCall('compact',{id});
-      if(doc?.raw)await putFastDoc(doc);
+      if(doc?.raw)putFastDoc(doc).catch(()=>{});
     }
     if(!doc)throw new Error('Book not found');
     await openCompactDoc(doc);
@@ -246,7 +352,10 @@
       const row=open.closest('.library-item');if(!row)return;
       event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();
       open.disabled=true;
-      openById(row.dataset.id).then(()=>{try{$('#libraryDialog')?.close();}catch{}toast(tx('Libro abierto.','Book opened.'),1800);}).catch(err=>toast(`${tx('No pude abrir el libro.','I could not open the book.')} ${String(err?.message||err)}`,7000)).finally(()=>open.disabled=false);
+      openById(row.dataset.id)
+        .then(()=>{try{$('#libraryDialog')?.close();}catch{}})
+        .catch(err=>toast(`${tx('No pude abrir el libro.','I could not open the book.')} ${String(err?.message||err)}`,7000))
+        .finally(()=>open.disabled=false);
       return;
     }
     const del=event.target?.closest?.('#libraryList .delete-book');
