@@ -77,7 +77,6 @@
   window.MPBookNatural = { synth, modelId: MODEL_ID, clearRuntime };
 
   // En instalaciones nuevas, Voces naturales queda seleccionada por defecto.
-  // Después se respeta cualquier elección manual del usuario.
   try {
     if (!localStorage.getItem(DEFAULT_MIGRATION)) {
       const provider = document.querySelector("#provider");
@@ -91,13 +90,53 @@
     }
   } catch (_) {}
 
+  function fixPiperVoiceGenders() {
+    try {
+      if (typeof PROVIDERS === "undefined" || !PROVIDERS.piper?.voices) return;
+
+      const meta = {
+        "es_ES-carlfm-x_low":        { g: "m", label: "CarlFM · ES-ES · ♂ · x-low" },
+        "es_ES-davefx-medium":       { g: "m", label: "DaveFX · ES-ES · ♂ · medium" },
+        "es_ES-mls_10246-low":       { g: "f", label: "MLS 10246 · ES-ES · ♀ · low" },
+        "es_ES-mls_9972-low":        { g: "f", label: "MLS 9972 · ES-ES · ♀ · low" },
+        "es_ES-sharvard-medium#0":   { g: "m", label: "Sharvard M · ES-ES · ♂ · medium" },
+        "es_ES-sharvard-medium#1":   { g: "f", label: "Sharvard F · ES-ES · ♀ · medium" },
+        "es_MX-ald-medium":          { g: "m", label: "ALD · ES-MX · ♂ · medium" },
+        "es_MX-claude-high":         { g: "f", label: "Claude · ES-MX · ♀ · high" },
+      };
+
+      for (const voice of PROVIDERS.piper.voices) {
+        const m = meta[voice.id];
+        if (!m) continue;
+        voice.g = m.g;
+        voice.label = m.label;
+      }
+
+      if (window.MPBookPiper?.voices) {
+        for (const voice of window.MPBookPiper.voices) {
+          const m = meta[voice.id];
+          if (!m) continue;
+          voice.g = m.g;
+          voice.label = m.label;
+        }
+      }
+
+      if (document.querySelector("#provider")?.value === "piper" && typeof filterVoices === "function") {
+        filterVoices();
+      }
+    } catch (_) {}
+  }
+
   // Piper se registra como un motor adicional sin agrandar index.html.
   try {
     if (!document.querySelector('script[data-mpbook-piper]')) {
       const script = document.createElement("script");
-      script.src = "./piper-voices.js?v=1";
+      script.src = "./piper-voices.js?v=2";
       script.dataset.mpbookPiper = "1";
+      script.addEventListener("load", fixPiperVoiceGenders, { once: true });
       document.body.appendChild(script);
+    } else {
+      setTimeout(fixPiperVoiceGenders, 0);
     }
   } catch (_) {}
 })();
