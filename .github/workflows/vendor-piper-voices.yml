@@ -1,0 +1,84 @@
+name: Vendor Piper voices
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/vendor-piper-voices.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  vendor-voices:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Download Spanish Piper voices
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://huggingface.co/rhasspy/piper-voices/resolve/main'
+          files=(
+            'es/es_MX/claude/high/es_MX-claude-high.onnx'
+            'es/es_MX/claude/high/es_MX-claude-high.onnx.json'
+            'es/es_MX/claude/high/MODEL_CARD'
+            'es/es_MX/ald/medium/es_MX-ald-medium.onnx'
+            'es/es_MX/ald/medium/es_MX-ald-medium.onnx.json'
+            'es/es_MX/ald/medium/MODEL_CARD'
+            'es/es_ES/davefx/medium/es_ES-davefx-medium.onnx'
+            'es/es_ES/davefx/medium/es_ES-davefx-medium.onnx.json'
+            'es/es_ES/davefx/medium/MODEL_CARD'
+            'es/es_ES/sharvard/medium/es_ES-sharvard-medium.onnx'
+            'es/es_ES/sharvard/medium/es_ES-sharvard-medium.onnx.json'
+            'es/es_ES/sharvard/medium/MODEL_CARD'
+            'es/es_ES/mls_10246/low/es_ES-mls_10246-low.onnx'
+            'es/es_ES/mls_10246/low/es_ES-mls_10246-low.onnx.json'
+            'es/es_ES/mls_10246/low/MODEL_CARD'
+            'es/es_ES/mls_9972/low/es_ES-mls_9972-low.onnx'
+            'es/es_ES/mls_9972/low/es_ES-mls_9972-low.onnx.json'
+            'es/es_ES/mls_9972/low/MODEL_CARD'
+            'es/es_ES/carlfm/x_low/es_ES-carlfm-x_low.onnx'
+            'es/es_ES/carlfm/x_low/es_ES-carlfm-x_low.onnx.json'
+            'es/es_ES/carlfm/x_low/MODEL_CARD'
+          )
+          for rel in "${files[@]}"; do
+            dst="assets/voices/$rel"
+            mkdir -p "$(dirname "$dst")"
+            if [ -s "$dst" ]; then
+              echo "Already present: $dst"
+              continue
+            fi
+            echo "Downloading $rel"
+            curl -fL --retry 5 --retry-delay 2 --connect-timeout 30 \
+              "$base/$rel?download=true" -o "$dst"
+          done
+
+      - name: Verify GitHub file-size limit
+        shell: bash
+        run: |
+          set -euo pipefail
+          find assets/voices -type f -printf '%s %p\n' | sort -nr | head -20
+          too_big=$(find assets/voices -type f -size +99M -print -quit)
+          if [ -n "$too_big" ]; then
+            echo "File exceeds GitHub's normal 100 MiB file limit: $too_big"
+            exit 1
+          fi
+
+      - name: Commit vendored voices
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add assets/voices
+          if git diff --cached --quiet; then
+            echo 'No voice files to commit.'
+            exit 0
+          fi
+          git commit -m 'Add local Spanish Piper voice models'
+          git push
