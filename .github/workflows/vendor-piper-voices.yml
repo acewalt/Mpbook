@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
 
       - name: Download Spanish Piper voices
         shell: bash
@@ -81,4 +81,6 @@ jobs:
             exit 0
           fi
           git commit -m 'Add local Spanish Piper voice models'
-          git push
+          git fetch origin main
+          git rebase origin/main
+          git push origin HEAD:main
