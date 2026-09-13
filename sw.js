@@ -1,10 +1,11 @@
-const CACHE='mpbook-v6';
+const CACHE='mpbook-v7';
 const ASSETS=[
   './',
   './index.html',
   './styles.css',
-  './app.js?v=6',
-  './local-tts.js?v=6',
+  './performance.js?v=7',
+  './app.js?v=7',
+  './local-tts.js?v=7',
   './tts-worker.js?v=6',
   './manifest.webmanifest',
   './icon.svg'
