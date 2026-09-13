@@ -1,5 +1,6 @@
 /* Audiobook｜有聲書 App shell cache: same-origin static files only. TTS/model requests pass through. */
-const CACHE = "mpbook-natural-v4";
+const CACHE = "mpbook-piper-v1";
+const PIPER_MODEL_CACHE = "mpbook-piper-files-v1";
 const ASSETS = [
   "./",
   "./index.html",
@@ -7,7 +8,9 @@ const ASSETS = [
   "./icon.svg",
   "./i18n.js?v=3",
   "./natural-voices.js?v=4",
-  "./natural-voices-worker.js?v=4"
+  "./natural-voices-worker.js?v=4",
+  "./piper-voices.js?v=1",
+  "./piper-voices-worker.js?v=1"
 ];
 
 self.addEventListener("install", (e) => {
@@ -18,7 +21,7 @@ self.addEventListener("install", (e) => {
 self.addEventListener("activate", (e) => {
   e.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE && k !== PIPER_MODEL_CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
