@@ -1,0 +1,46 @@
+name: Build MPBook Desktop
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "desktop/MPBook.Desktop/**"
+      - "desktop-bridge.js"
+      - "natural-voices.js"
+      - ".github/workflows/mpbook-desktop.yml"
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        run: dotnet restore desktop/MPBook.Desktop/MPBook.Desktop.csproj
+
+      - name: Publish Windows x64
+        run: >-
+          dotnet publish desktop/MPBook.Desktop/MPBook.Desktop.csproj
+          -c Release
+          -r win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -o dist/MPBook.Desktop
+
+      - name: Upload executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: MPBook-Desktop-win-x64
+          path: dist/MPBook.Desktop/**
+          if-no-files-found: error
+          retention-days: 14
