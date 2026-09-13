@@ -63,7 +63,7 @@
 
   function ensureWorker(){
     if(state.worker) return state.worker;
-    const worker = new Worker('./tts-worker.js?v=8', {type:'module'});
+    const worker = new Worker('./tts-worker.js?v=15', {type:'module'});
     worker.onmessage = e => {
       const msg = e.data || {};
       const p = state.pending.get(msg.id);
@@ -104,6 +104,7 @@
   }
 
   async function currentBook(){
+    if(window.MPBookCurrentBook?.chapters?.length) return window.MPBookCurrentBook;
     const title = $('#bookTitle')?.textContent?.trim();
     if(!title) return null;
     try{
@@ -320,7 +321,6 @@
     },true);
     $('#exportEngine')?.addEventListener('change',syncExportUI);
 
-    // Capture phase: this owns export and prevents the old OpenAI-only handler in app.js.
     $('#startExportBtn')?.addEventListener('click',e=>{
       e.preventDefault();e.stopImmediatePropagation();startExport();
     },true);
